@@ -4,6 +4,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { initApp } from './utils/init.js'
 import authRoutes from './routes/auth.js'
+import githubRoutes from './routes/github.js'
 import { authMiddleware } from './utils/auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -19,6 +20,7 @@ app.use(express.json())
 
 // API Routes
 app.use('/api/auth', authRoutes)
+app.use('/api/github', githubRoutes)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
 })

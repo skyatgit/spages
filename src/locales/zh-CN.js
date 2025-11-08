@@ -200,6 +200,18 @@ export default {
     enterCurrentPassword: '请输入当前密码',
     passwordsNotMatch: '两次输入的密码不一致',
     enterNewCredentials: '请输入新用户名或密码',
-    githubOauthTodo: '即将实现 GitHub OAuth 功能'
+    githubConnected: 'GitHub 账号连接成功！',
+    githubAuthFailed: 'GitHub 认证失败，请重试',
+    githubNotConfigured: 'GitHub App 未配置。请先创建 GitHub App 并配置环境变量',
+    popupBlocked: '弹窗被浏览器阻止，请允许弹窗后重试',
+    accountRefreshFailed: '刷新账号信息失败',
+    accountRemoveFailed: '删除账号失败',
+    githubError_no_code: 'GitHub 认证失败：缺少授权码',
+    githubError_no_token: 'GitHub 认证失败：无法获取访问令牌',
+    githubError_no_installation: 'GitHub 认证失败：未找到 App 安装记录，请先安装应用',
+    githubError_no_app: 'GitHub 认证失败：未找到 App 配置',
+    githubError_manifest_failed: 'GitHub App 创建失败',
+    githubError_install_failed: 'GitHub App 安装失败',
+    githubError_auth_failed: 'GitHub 认证失败，请重试'
   }
 }

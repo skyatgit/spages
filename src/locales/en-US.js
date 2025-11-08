@@ -200,6 +200,18 @@ export default {
     enterCurrentPassword: 'Please enter your current password',
     passwordsNotMatch: 'New passwords do not match',
     enterNewCredentials: 'Please enter new username or password',
-    githubOauthTodo: 'GitHub OAuth flow will be implemented'
+    githubConnected: 'GitHub account connected successfully!',
+    githubAuthFailed: 'GitHub authentication failed, please try again',
+    githubNotConfigured: 'GitHub App is not configured. Please create a GitHub App and configure environment variables',
+    popupBlocked: 'Popup was blocked by browser. Please allow popups and try again',
+    accountRefreshFailed: 'Failed to refresh account information',
+    accountRemoveFailed: 'Failed to remove account',
+    githubError_no_code: 'GitHub authentication failed: Missing authorization code',
+    githubError_no_token: 'GitHub authentication failed: Unable to get access token',
+    githubError_no_installation: 'GitHub authentication failed: App installation not found, please install the app first',
+    githubError_no_app: 'GitHub authentication failed: App configuration not found',
+    githubError_manifest_failed: 'GitHub App creation failed',
+    githubError_install_failed: 'GitHub App installation failed',
+    githubError_auth_failed: 'GitHub authentication failed, please try again'
   }
 }

@@ -178,14 +178,17 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
+import { getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount } from '@/api/github'
 
 const { t } = useI18n()
 const modal = useModal()
+const route = useRoute()
 
 // Admin Credentials
 const currentPassword = ref('')
@@ -193,23 +196,9 @@ const newUsername = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 
-// GitHub Accounts - Mock data
-const githubAccounts = ref([
-  {
-    id: '1',
-    username: 'john-doe',
-    email: 'john@example.com',
-    avatar: null,
-    connectedAt: new Date().toISOString()
-  },
-  {
-    id: '2',
-    username: 'company-org',
-    email: 'dev@company.com',
-    avatar: null,
-    connectedAt: new Date(Date.now() - 86400000).toISOString()
-  }
-])
+// GitHub Accounts
+const githubAccounts = ref([])
+const loadingAccounts = ref(false)
 
 // Storage Data
 const storageData = ref({
@@ -265,26 +254,86 @@ const updateCredentials = async () => {
   confirmPassword.value = ''
 }
 
+// Load GitHub accounts
+const loadGithubAccounts = async () => {
+  try {
+    loadingAccounts.value = true
+    const accounts = await getGithubAccounts()
+    githubAccounts.value = accounts
+  } catch (error) {
+    console.error('Failed to load GitHub accounts:', error)
+  } finally {
+    loadingAccounts.value = false
+  }
+}
+
+// Add GitHub account via GitHub App creation
 const addGithubAccount = async () => {
-  console.log('Adding GitHub account...')
-  // Will implement OAuth flow later
-  await modal.alert(t('settings.githubOauthTodo'))
-}
+  try {
+    const { url } = await getGithubInstallUrl()
 
-const refreshAccount = async (id) => {
-  console.log('Refreshing account:', id)
-  await modal.alert(t('settings.accountRefreshed'))
-}
+    if (!url) {
+      await modal.alert(t('settings.githubNotConfigured'))
+      return
+    }
 
-const removeAccount = async (id) => {
-  const confirmed = await modal.confirm(t('settings.removeAccountConfirm'))
-  if (confirmed) {
-    const index = githubAccounts.value.findIndex(a => a.id === id)
-    if (index !== -1) {
-      githubAccounts.value.splice(index, 1)
+    // Open the manifest submission page in new tab
+    window.open(url, '_blank')
+  } catch (error) {
+    console.error('Failed to create GitHub App:', error)
+    if (error.response && error.response.status === 500) {
+      await modal.alert(t('settings.githubNotConfigured'))
+    } else {
+      await modal.alert(t('settings.githubAuthFailed'))
     }
   }
 }
+
+// Refresh account information
+const refreshAccount = async (id) => {
+  try {
+    const updatedAccount = await refreshGithubAccount(id)
+    const index = githubAccounts.value.findIndex(a => a.id === id)
+    if (index !== -1) {
+      githubAccounts.value[index] = updatedAccount
+    }
+    await modal.alert(t('settings.accountRefreshed'))
+  } catch (error) {
+    console.error('Failed to refresh account:', error)
+    await modal.alert(t('settings.accountRefreshFailed'))
+  }
+}
+
+// Remove GitHub account
+const removeAccount = async (id) => {
+  const confirmed = await modal.confirm(t('settings.removeAccountConfirm'))
+  if (confirmed) {
+    try {
+      await removeGithubAccount(id)
+      const index = githubAccounts.value.findIndex(a => a.id === id)
+      if (index !== -1) {
+        githubAccounts.value.splice(index, 1)
+      }
+    } catch (error) {
+      console.error('Failed to remove account:', error)
+      await modal.alert(t('settings.accountRemoveFailed'))
+    }
+  }
+}
+
+// Check for OAuth callback
+onMounted(async () => {
+  await loadGithubAccounts()
+
+  // Check if coming from OAuth callback
+  if (route.query.success === 'github_connected') {
+    await modal.alert(t('settings.githubConnected'))
+    await loadGithubAccounts()
+  } else if (route.query.error) {
+    const errorKey = `settings.githubError_${route.query.error}`
+    await modal.alert(t(errorKey, t('settings.githubAuthFailed')))
+  }
+})
 
 const clearCache = async () => {
   const confirmed = await modal.confirm(t('settings.clearCacheConfirm'))

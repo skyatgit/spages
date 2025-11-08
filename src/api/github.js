@@ -1,23 +1,31 @@
 import apiClient from './index'
 
-export const githubAPI = {
-  // Get GitHub OAuth URL
-  getAuthUrl() {
-    return apiClient.get('/github/auth-url')
-  },
+// Get GitHub App creation URL
+export const getGithubInstallUrl = async () => {
+  return apiClient.get('/github/create-app')
+}
 
-  // Exchange code for token
-  exchangeToken(code) {
-    return apiClient.post('/github/token', { code })
-  },
+// Get all connected GitHub accounts
+export const getGithubAccounts = async () => {
+  return apiClient.get('/github/accounts')
+}
 
-  // Get user repositories
-  getRepositories() {
-    return apiClient.get('/github/repositories')
-  },
+// Refresh account information
+export const refreshGithubAccount = async (accountId) => {
+  return apiClient.post(`/github/accounts/${accountId}/refresh`)
+}
 
-  // Get repository details
-  getRepository(owner, repo) {
-    return apiClient.get(`/github/repositories/${owner}/${repo}`)
-  }
+// Remove GitHub account
+export const removeGithubAccount = async (accountId) => {
+  return apiClient.delete(`/github/accounts/${accountId}`)
+}
+
+// Get repositories for an account
+export const getGithubRepositories = async (accountId) => {
+  return apiClient.get(`/github/accounts/${accountId}/repositories`)
+}
+
+// Get branches for a repository
+export const getGithubBranches = async (accountId, owner, repo) => {
+  return apiClient.get(`/github/accounts/${accountId}/repositories/${owner}/${repo}/branches`)
 }
