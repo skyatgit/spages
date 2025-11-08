@@ -1,15 +1,655 @@
 <template>
-  <div class="settings">
-    <h1>Settings</h1>
-    <p>Configure GitHub token and other settings</p>
-  </div>
+  <Layout>
+    <div class="settings">
+      <div class="page-header">
+        <div>
+          <h1>Settings</h1>
+          <p class="subtitle">Configure your deployment platform</p>
+        </div>
+        <button class="btn btn-secondary" @click="handleLogout">
+          🚪 Logout
+        </button>
+      </div>
+
+      <div class="settings-grid">
+        <!-- Admin Credentials -->
+        <div class="settings-card">
+          <h2>Administrator Credentials</h2>
+          <p class="card-description">
+            Change your login username and password
+          </p>
+
+          <div class="form-group">
+            <label>Current Password</label>
+            <input
+              v-model="currentPassword"
+              type="password"
+              class="form-input"
+              placeholder="Enter current password"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>New Username</label>
+            <input
+              v-model="newUsername"
+              type="text"
+              class="form-input"
+              placeholder="admin"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>New Password</label>
+            <input
+              v-model="newPassword"
+              type="password"
+              class="form-input"
+              placeholder="Enter new password"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Confirm New Password</label>
+            <input
+              v-model="confirmPassword"
+              type="password"
+              class="form-input"
+              placeholder="Confirm new password"
+            />
+          </div>
+
+          <button class="btn btn-primary" @click="updateCredentials">
+            💾 Update Credentials
+          </button>
+        </div>
+
+        <!-- GitHub Accounts -->
+        <div class="settings-card">
+          <h2>GitHub Accounts</h2>
+          <p class="card-description">
+            Manage multiple GitHub accounts for accessing repositories
+          </p>
+
+          <div class="github-accounts-list">
+            <div
+              v-for="account in githubAccounts"
+              :key="account.id"
+              class="github-account-item"
+            >
+              <div class="account-info">
+                <div class="account-avatar">
+                  <img v-if="account.avatar" :src="account.avatar" :alt="account.username" />
+                  <span v-else class="avatar-placeholder">{{ account.username[0].toUpperCase() }}</span>
+                </div>
+                <div class="account-details">
+                  <div class="account-username">{{ account.username }}</div>
+                  <div class="account-email">{{ account.email }}</div>
+                  <div class="account-meta">
+                    Connected on {{ formatDate(account.connectedAt) }}
+                  </div>
+                </div>
+              </div>
+              <div class="account-actions">
+                <button class="btn-icon" @click="refreshAccount(account.id)" title="Refresh">
+                  🔄
+                </button>
+                <button class="btn-icon" @click="removeAccount(account.id)" title="Remove">
+                  🗑️
+                </button>
+              </div>
+            </div>
+
+            <div v-if="githubAccounts.length === 0" class="no-accounts">
+              <p>No GitHub accounts connected</p>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" @click="addGithubAccount">
+            ➕ Connect GitHub Account
+          </button>
+        </div>
+
+        <!-- Deployment Settings -->
+        <div class="settings-card">
+          <h2>Deployment Settings</h2>
+          <p class="card-description">
+            Configure default settings for project deployments
+          </p>
+
+          <div class="form-group">
+            <label>Base Port</label>
+            <p class="field-description">
+              Starting port number for deployed projects
+            </p>
+            <input
+              v-model.number="basePort"
+              type="number"
+              class="form-input"
+              placeholder="3001"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Default Build Command</label>
+            <p class="field-description">
+              Command to run when building projects (can be overridden per project)
+            </p>
+            <input
+              v-model="defaultBuildCommand"
+              type="text"
+              class="form-input"
+              placeholder="npm run build"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Default Output Directory</label>
+            <p class="field-description">
+              Directory where build output is located
+            </p>
+            <input
+              v-model="defaultOutputDir"
+              type="text"
+              class="form-input"
+              placeholder="dist"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input v-model="autoInstall" type="checkbox" class="checkbox" />
+              Auto-install dependencies
+            </label>
+            <p class="field-description">
+              Automatically run npm install before building
+            </p>
+          </div>
+
+          <button class="btn btn-primary" @click="saveDeploymentSettings">
+            💾 Save Settings
+          </button>
+        </div>
+
+        <!-- Storage & Cleanup -->
+        <div class="settings-card">
+          <h2>Storage & Cleanup</h2>
+          <p class="card-description">
+            Manage storage and cleanup policies
+          </p>
+
+          <div class="storage-info">
+            <div class="storage-item">
+              <div class="storage-label">Projects Data</div>
+              <div class="storage-value">{{ storageData.projects }} MB</div>
+            </div>
+            <div class="storage-item">
+              <div class="storage-label">Build Cache</div>
+              <div class="storage-value">{{ storageData.cache }} MB</div>
+            </div>
+            <div class="storage-item">
+              <div class="storage-label">Logs</div>
+              <div class="storage-value">{{ storageData.logs }} MB</div>
+            </div>
+            <div class="storage-item">
+              <div class="storage-label">Total</div>
+              <div class="storage-value total">{{ storageData.total }} MB</div>
+            </div>
+          </div>
+
+          <div class="cleanup-actions">
+            <button class="btn btn-secondary" @click="clearCache">
+              🗑️ Clear Build Cache
+            </button>
+            <button class="btn btn-secondary" @click="clearLogs">
+              🗑️ Clear Old Logs
+            </button>
+          </div>
+        </div>
+
+        <!-- System Information -->
+        <div class="settings-card">
+          <h2>System Information</h2>
+          <p class="card-description">
+            Platform and runtime information
+          </p>
+
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Platform Version</label>
+              <span>SPages v0.1.0</span>
+            </div>
+            <div class="info-item">
+              <label>Node.js Version</label>
+              <span>{{ systemInfo.nodeVersion }}</span>
+            </div>
+            <div class="info-item">
+              <label>Platform</label>
+              <span>{{ systemInfo.platform }}</span>
+            </div>
+            <div class="info-item">
+              <label>Data Directory</label>
+              <code>{{ systemInfo.dataDir }}</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Layout>
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import Layout from '@/components/Layout.vue'
+import { logout } from '@/utils/auth'
+
+// Admin Credentials
+const currentPassword = ref('')
+const newUsername = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+
+// GitHub Accounts - Mock data
+const githubAccounts = ref([
+  {
+    id: '1',
+    username: 'john-doe',
+    email: 'john@example.com',
+    avatar: null,
+    connectedAt: new Date().toISOString()
+  },
+  {
+    id: '2',
+    username: 'company-org',
+    email: 'dev@company.com',
+    avatar: null,
+    connectedAt: new Date(Date.now() - 86400000).toISOString()
+  }
+])
+
+// Deployment Settings
+const basePort = ref(3001)
+const defaultBuildCommand = ref('npm run build')
+const defaultOutputDir = ref('dist')
+const autoInstall = ref(true)
+
+// Storage Data
+const storageData = ref({
+  projects: 245,
+  cache: 512,
+  logs: 8,
+  total: 765
+})
+
+// System Info
+const systemInfo = ref({
+  nodeVersion: 'v20.19.0',
+  platform: 'Windows 11 (x64)',
+  dataDir: 'C:\\Users\\username\\SPages\\data'
+})
+
+const handleLogout = () => {
+  if (confirm('Are you sure you want to logout?')) {
+    logout()
+  }
+}
+
+const updateCredentials = () => {
+  if (!currentPassword.value) {
+    alert('Please enter your current password')
+    return
+  }
+
+  if (newPassword.value && newPassword.value !== confirmPassword.value) {
+    alert('New passwords do not match')
+    return
+  }
+
+  if (!newUsername.value && !newPassword.value) {
+    alert('Please enter new username or password')
+    return
+  }
+
+  console.log('Updating credentials:', {
+    currentPassword: currentPassword.value,
+    newUsername: newUsername.value || undefined,
+    newPassword: newPassword.value || undefined
+  })
+
+  // TODO: Implement API call
+  alert('Credentials updated successfully!')
+
+  // Clear form
+  currentPassword.value = ''
+  newUsername.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+}
+
+const addGithubAccount = () => {
+  console.log('Adding GitHub account...')
+  // Will implement OAuth flow later
+  alert('GitHub OAuth flow will be implemented')
+}
+
+const refreshAccount = (id) => {
+  console.log('Refreshing account:', id)
+  alert('Account refreshed!')
+}
+
+const removeAccount = (id) => {
+  if (confirm('Are you sure you want to remove this GitHub account?')) {
+    const index = githubAccounts.value.findIndex(a => a.id === id)
+    if (index !== -1) {
+      githubAccounts.value.splice(index, 1)
+    }
+  }
+}
+
+const saveDeploymentSettings = () => {
+  console.log('Saving deployment settings...', {
+    basePort: basePort.value,
+    defaultBuildCommand: defaultBuildCommand.value,
+    defaultOutputDir: defaultOutputDir.value,
+    autoInstall: autoInstall.value
+  })
+  alert('Deployment settings saved!')
+}
+
+const clearCache = () => {
+  if (confirm('Are you sure you want to clear the build cache?')) {
+    console.log('Clearing build cache...')
+    storageData.value.cache = 0
+    storageData.value.total = storageData.value.projects + storageData.value.logs
+    alert('Build cache cleared!')
+  }
+}
+
+const clearLogs = () => {
+  if (confirm('Are you sure you want to clear old logs?')) {
+    console.log('Clearing logs...')
+    storageData.value.logs = 0
+    storageData.value.total = storageData.value.projects + storageData.value.cache
+    alert('Logs cleared!')
+  }
+}
+
+const formatDate = (date) => {
+  return new Date(date).toLocaleDateString()
+}
 </script>
 
 <style scoped>
 .settings {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.page-header h1 {
+  font-size: 32px;
+  color: #2c3e50;
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.settings-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.settings-card h2 {
+  font-size: 20px;
+  color: #2c3e50;
+  margin-bottom: 8px;
+}
+
+.card-description {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  color: #2c3e50;
+  font-weight: 600;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.field-description {
+  color: #7f8c8d;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #ecf0f1;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.checkbox {
+  margin-right: 8px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: #3498db;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2980b9;
+}
+
+.btn-secondary {
+  background: #ecf0f1;
+  color: #2c3e50;
+}
+
+.btn-secondary:hover {
+  background: #bdc3c7;
+}
+
+.btn-icon {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.github-accounts-list {
+  margin-bottom: 20px;
+  min-height: 100px;
+}
+
+.github-account-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 2px solid #ecf0f1;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  transition: border-color 0.3s ease;
+}
+
+.github-account-item:hover {
+  border-color: #3498db;
+}
+
+.account-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.account-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #ecf0f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.account-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  font-size: 20px;
+  font-weight: bold;
+  color: #7f8c8d;
+}
+
+.account-details {
+  flex: 1;
+}
+
+.account-username {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 4px;
+}
+
+.account-email {
+  font-size: 13px;
+  color: #7f8c8d;
+  margin-bottom: 2px;
+}
+
+.account-meta {
+  font-size: 12px;
+  color: #95a5a6;
+}
+
+.account-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.no-accounts {
+  text-align: center;
+  padding: 40px;
+  color: #7f8c8d;
+}
+
+.storage-info {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
   padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.storage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.storage-label {
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+.storage-value {
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.storage-value.total {
+  color: #3498db;
+  font-size: 18px;
+}
+
+.cleanup-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.info-item label {
+  display: block;
+  font-size: 12px;
+  color: #7f8c8d;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.info-item span,
+.info-item code {
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.info-item code {
+  background: #f5f5f5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+  display: block;
+  word-break: break-all;
 }
 </style>
