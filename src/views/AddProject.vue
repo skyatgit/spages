@@ -80,38 +80,45 @@
                 v-model="projectName"
                 type="text"
                 class="form-input"
+                :class="{ 'input-error': projectNameError }"
                 placeholder="my-awesome-project"
               />
+              <p v-if="projectNameError" class="error-message">{{ projectNameError }}</p>
+              <p v-else-if="projectNameChecking" class="info-message">{{ $t('addProject.checkingProjectName') }}</p>
+              <p v-else-if="projectNameAvailable" class="success-message">{{ $t('addProject.projectNameAvailable') }}</p>
             </div>
 
             <div class="form-group">
               <label>{{ $t('addProject.branch') }}</label>
-              <input
-                v-model="branch"
-                type="text"
-                class="form-input"
-                placeholder="main"
-              />
+              <div class="branch-select-wrapper">
+                <select v-model="branch" class="form-select" :disabled="loadingBranches">
+                  <option v-if="loadingBranches" value="">{{ $t('dashboard.loadingBranches') }}</option>
+                  <option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
+                </select>
+                <button
+                  v-if="!loadingBranches"
+                  class="refresh-btn"
+                  @click="loadBranches"
+                  type="button"
+                  :title="$t('dashboard.refreshBranches')"
+                >
+                  🔄
+                </button>
+              </div>
             </div>
 
             <div class="form-group">
-              <label>{{ $t('addProject.buildCommand') }}</label>
+              <label>{{ $t('addProject.port') }}</label>
               <input
-                v-model="buildCommand"
-                type="text"
+                v-model.number="port"
+                type="number"
                 class="form-input"
-                :placeholder="$t('addProject.buildCommandPlaceholder')"
+                :class="{ 'input-error': portError }"
+                placeholder="3001"
               />
-            </div>
-
-            <div class="form-group">
-              <label>{{ $t('addProject.outputDir') }}</label>
-              <input
-                v-model="outputDir"
-                type="text"
-                class="form-input"
-                :placeholder="$t('addProject.outputDirPlaceholder')"
-              />
+              <p v-if="portError" class="error-message">{{ portError }}</p>
+              <p v-else-if="portChecking" class="info-message">{{ $t('addProject.checkingPort') }}</p>
+              <p v-else-if="portAvailable" class="success-message">{{ $t('addProject.portAvailable') }}</p>
             </div>
 
             <div class="form-actions">
@@ -126,11 +133,15 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
+import { useModal } from '@/utils/modal'
 
 const router = useRouter()
+const { t } = useI18n()
+const modal = useModal()
 
 const isGithubConnected = ref(true) // Mock: set to false to see connect screen
 const loading = ref(false)
@@ -139,8 +150,64 @@ const selectedAccount = ref('1') // Selected GitHub account ID
 const selectedRepo = ref(null)
 const projectName = ref('')
 const branch = ref('main')
-const buildCommand = ref('')
-const outputDir = ref('')
+const port = ref(3001)
+const branches = ref(['main', 'master', 'develop'])
+const loadingBranches = ref(false)
+const portError = ref('')
+const portChecking = ref(false)
+const portAvailable = ref(false)
+const projectNameError = ref('')
+const projectNameChecking = ref(false)
+const projectNameAvailable = ref(false)
+let projectNameCheckTimer = null
+let portCheckTimer = null
+
+// 已使用的端口列表（模拟）
+const usedPorts = ref([3001, 3002, 3003])
+// 已存在的项目名称列表（模拟）
+const existingProjectNames = ref(['my-blog', 'portfolio-site', 'docs-website'])
+
+// 监听项目名称变化，实时检查
+watch(projectName, (newName) => {
+  // 清除之前的定时器
+  if (projectNameCheckTimer) {
+    clearTimeout(projectNameCheckTimer)
+  }
+
+  // 如果为空，重置状态
+  if (!newName || !newName.trim()) {
+    projectNameError.value = ''
+    projectNameAvailable.value = false
+    projectNameChecking.value = false
+    return
+  }
+
+  // 防抖：500ms 后执行检查
+  projectNameCheckTimer = setTimeout(() => {
+    checkProjectName()
+  }, 500)
+})
+
+// 监听端口变化，实时检查
+watch(port, (newPort) => {
+  // 清除之前的定时器
+  if (portCheckTimer) {
+    clearTimeout(portCheckTimer)
+  }
+
+  // 如果为空，重置状态
+  if (!newPort) {
+    portError.value = ''
+    portAvailable.value = false
+    portChecking.value = false
+    return
+  }
+
+  // 防抖：500ms 后执行检查
+  portCheckTimer = setTimeout(() => {
+    checkPort()
+  }, 500)
+})
 
 // Mock GitHub accounts
 const githubAccounts = ref([
@@ -226,25 +293,157 @@ const loadRepositories = () => {
 const selectRepo = (repo) => {
   selectedRepo.value = repo
   projectName.value = repo.name
+  // 加载仓库的分支列表
+  loadBranches()
+  // 自动分配下一个可用端口
+  assignNextAvailablePort()
+  // 检查项目名称
+  checkProjectName()
+}
+
+const loadBranches = async () => {
+  if (!selectedRepo.value) return
+
+  loadingBranches.value = true
+  try {
+    // TODO: 调用后端 API 获取实际的分支列表
+    // const response = await fetch(`/api/repos/${selectedRepo.value.id}/branches`)
+    // branches.value = await response.json()
+
+    // 模拟 API 调用
+    await new Promise(resolve => setTimeout(resolve, 500))
+    branches.value = ['main', 'master', 'develop', 'staging', 'production']
+  } catch (error) {
+    console.error('Failed to load branches:', error)
+    branches.value = ['main', 'master', 'develop']
+  } finally {
+    loadingBranches.value = false
+  }
+}
+
+const assignNextAvailablePort = () => {
+  let nextPort = 3001
+  while (usedPorts.value.includes(nextPort)) {
+    nextPort++
+  }
+  port.value = nextPort
+  checkPort()
+}
+
+const checkProjectName = async () => {
+  projectNameError.value = ''
+  projectNameAvailable.value = false
+
+  if (!projectName.value || !projectName.value.trim()) {
+    return
+  }
+
+  // 验证项目名称格式（只允许字母、数字、连字符、下划线）
+  const namePattern = /^[a-zA-Z0-9_-]+$/
+  if (!namePattern.test(projectName.value)) {
+    projectNameError.value = t('addProject.invalidProjectName')
+    return
+  }
+
+  projectNameChecking.value = true
+
+  try {
+    // TODO: 调用后端 API 检查项目名称是否已存在
+    // const response = await fetch(`/api/check-project-name/${projectName.value}`)
+    // const data = await response.json()
+
+    // 模拟 API 调用
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    if (existingProjectNames.value.includes(projectName.value)) {
+      projectNameError.value = t('addProject.projectNameExists')
+    } else {
+      projectNameAvailable.value = true
+    }
+  } catch (error) {
+    console.error('Failed to check project name:', error)
+    projectNameError.value = t('addProject.projectNameCheckFailed')
+  } finally {
+    projectNameChecking.value = false
+  }
+}
+
+const checkPort = async () => {
+  portError.value = ''
+  portAvailable.value = false
+
+  if (!port.value || port.value < 1024 || port.value > 65535) {
+    portError.value = t('addProject.invalidPort')
+    return
+  }
+
+  portChecking.value = true
+
+  try {
+    // TODO: 调用后端 API 检查端口是否被占用
+    // const response = await fetch(`/api/check-port/${port.value}`)
+    // const data = await response.json()
+
+    // 模拟 API 调用
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    if (usedPorts.value.includes(port.value)) {
+      portError.value = t('addProject.portInUse')
+    } else {
+      portAvailable.value = true
+    }
+  } catch (error) {
+    console.error('Failed to check port:', error)
+    portError.value = t('addProject.portCheckFailed')
+  } finally {
+    portChecking.value = false
+  }
 }
 
 const cancel = () => {
   selectedRepo.value = null
   projectName.value = ''
   branch.value = 'main'
-  buildCommand.value = ''
-  outputDir.value = ''
+  port.value = 3001
+  portError.value = ''
+  portAvailable.value = false
+  projectNameError.value = ''
+  projectNameAvailable.value = false
 }
 
-const addProject = () => {
+const addProject = async () => {
+  // 验证表单
+  if (!projectName.value.trim()) {
+    await modal.alert(t('addProject.projectNameRequired'))
+    return
+  }
+
+  if (projectNameError.value || !projectNameAvailable.value) {
+    await modal.alert(t('addProject.projectNameNotAvailable'))
+    return
+  }
+
+  if (!branch.value) {
+    await modal.alert(t('addProject.branchRequired'))
+    return
+  }
+
+  if (portError.value || !portAvailable.value) {
+    await modal.alert(t('addProject.portNotAvailable'))
+    return
+  }
+
   console.log('Adding project:', {
     repo: selectedRepo.value,
     name: projectName.value,
     branch: branch.value,
-    buildCommand: buildCommand.value,
-    outputDir: outputDir.value
+    port: port.value
   })
+
+  // TODO: 调用后端 API 创建项目
   // Will implement actual project creation later
+
+  await modal.alert(t('addProject.projectAdded'))
   router.push('/')
 }
 </script>
@@ -494,6 +693,86 @@ const addProject = () => {
 .form-input:focus {
   outline: none;
   border-color: #3498db;
+}
+
+.input-error {
+  border-color: #e74c3c;
+}
+
+.input-error:focus {
+  border-color: #e74c3c;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+}
+
+.error-message {
+  color: #e74c3c;
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.info-message {
+  color: #3498db;
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.success-message {
+  color: #27ae60;
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.branch-select-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.form-select {
+  flex: 1;
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #ecf0f1;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+  background: white;
+  cursor: pointer;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.form-select:disabled {
+  background: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.refresh-btn {
+  padding: 10px 12px;
+  background: #3498db;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+}
+
+.refresh-btn:hover {
+  background: #2980b9;
+  transform: rotate(90deg);
+}
+
+.refresh-btn:active {
+  transform: rotate(180deg);
 }
 
 .form-actions {

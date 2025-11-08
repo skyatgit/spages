@@ -110,67 +110,6 @@
           </button>
         </div>
 
-        <!-- Deployment Settings -->
-        <div class="settings-card">
-          <h2>{{ $t('settings.deploymentSection') }}</h2>
-          <p class="card-description">
-            {{ $t('settings.deploymentDesc') }}
-          </p>
-
-          <div class="form-group">
-            <label>{{ $t('settings.basePort') }}</label>
-            <p class="field-description">
-              {{ $t('settings.basePortDesc') }}
-            </p>
-            <input
-              v-model.number="basePort"
-              type="number"
-              class="form-input"
-              placeholder="3001"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>{{ $t('settings.defaultBuildCommand') }}</label>
-            <p class="field-description">
-              {{ $t('settings.defaultBuildCommandDesc') }}
-            </p>
-            <input
-              v-model="defaultBuildCommand"
-              type="text"
-              class="form-input"
-              placeholder="npm run build"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>{{ $t('settings.defaultOutputDir') }}</label>
-            <p class="field-description">
-              {{ $t('settings.defaultOutputDirDesc') }}
-            </p>
-            <input
-              v-model="defaultOutputDir"
-              type="text"
-              class="form-input"
-              placeholder="dist"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>
-              <input v-model="autoInstall" type="checkbox" class="checkbox" />
-              {{ $t('settings.autoInstall') }}
-            </label>
-            <p class="field-description">
-              {{ $t('settings.autoInstallDesc') }}
-            </p>
-          </div>
-
-          <button class="btn btn-primary" @click="saveDeploymentSettings">
-            💾 {{ $t('common.save') }}
-          </button>
-        </div>
-
         <!-- Storage & Cleanup -->
         <div class="settings-card">
           <h2>{{ $t('settings.storageSection') }}</h2>
@@ -272,12 +211,6 @@ const githubAccounts = ref([
   }
 ])
 
-// Deployment Settings
-const basePort = ref(3001)
-const defaultBuildCommand = ref('npm run build')
-const defaultOutputDir = ref('dist')
-const autoInstall = ref(true)
-
 // Storage Data
 const storageData = ref({
   projects: 245,
@@ -351,16 +284,6 @@ const removeAccount = async (id) => {
       githubAccounts.value.splice(index, 1)
     }
   }
-}
-
-const saveDeploymentSettings = async () => {
-  console.log('Saving deployment settings...', {
-    basePort: basePort.value,
-    defaultBuildCommand: defaultBuildCommand.value,
-    defaultOutputDir: defaultOutputDir.value,
-    autoInstall: autoInstall.value
-  })
-  await modal.alert(t('settings.settingsSaved'))
 }
 
 const clearCache = async () => {

@@ -25,6 +25,9 @@
     </div>
 
     <div class="card-footer">
+      <button class="btn btn-small btn-edit" @click.stop="$emit('edit', project)" title="编辑配置">
+        ⚙️
+      </button>
       <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-small" @click.stop>
         {{ $t('dashboard.visitSite') }}
       </a>
@@ -48,7 +51,7 @@ defineProps({
   }
 })
 
-defineEmits(['click', 'deploy'])
+defineEmits(['click', 'deploy', 'edit'])
 
 const handleClick = () => {
   // Router navigation will be handled by parent
@@ -150,5 +153,17 @@ const formatDate = (date) => {
 
 .btn:not(.btn-primary):hover {
   background: #bdc3c7;
+}
+
+.btn-edit {
+  background: #f39c12;
+  color: white;
+  font-size: 16px;
+  padding: 6px 10px;
+}
+
+.btn-edit:hover {
+  background: #e67e22;
+  transform: scale(1.1);
 }
 </style>

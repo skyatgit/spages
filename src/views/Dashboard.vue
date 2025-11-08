@@ -27,9 +27,16 @@
           :project="project"
           @click="goToProject(project.id)"
           @deploy="handleDeploy(project.id)"
+          @edit="handleEdit"
         />
       </div>
     </div>
+
+    <EditProjectModal
+      v-model="showEditModal"
+      :project="editingProject"
+      @save="handleSaveProject"
+    />
   </Layout>
 </template>
 
@@ -38,8 +45,14 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Layout from '@/components/Layout.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
+import EditProjectModal from '@/components/EditProjectModal.vue'
+import { useModal } from '@/utils/modal'
 
 const router = useRouter()
+const modal = useModal()
+
+const showEditModal = ref(false)
+const editingProject = ref(null)
 
 // Mock data for demonstration
 const projects = ref([
@@ -85,6 +98,24 @@ const goToProject = (id) => {
 const handleDeploy = (id) => {
   console.log('Deploy project:', id)
   // Will implement actual deployment later
+}
+
+const handleEdit = (project) => {
+  editingProject.value = project
+  showEditModal.value = true
+}
+
+const handleSaveProject = async (updatedProject) => {
+  console.log('Saving project:', updatedProject)
+
+  // 更新本地项目列表
+  const index = projects.value.findIndex(p => p.id === updatedProject.id)
+  if (index !== -1) {
+    projects.value[index] = { ...projects.value[index], ...updatedProject }
+  }
+
+  // TODO: 发送到后端保存
+  await modal.alert('项目配置已更新！')
 }
 </script>
 
