@@ -20,5 +20,8 @@ export function clearAuth() {
 
 export function logout() {
   clearAuth()
-  window.location.href = '/login'
+  // 使用路由导航，而不是直接刷新页面
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login'
+  }
 }

@@ -240,8 +240,13 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
+import { useModal } from '@/utils/modal'
+
+const { t } = useI18n()
+const modal = useModal()
 
 // Admin Credentials
 const currentPassword = ref('')
@@ -288,25 +293,26 @@ const systemInfo = ref({
   dataDir: 'C:\\Users\\username\\SPages\\data'
 })
 
-const handleLogout = () => {
-  if (confirm('Are you sure you want to logout?')) {
+const handleLogout = async () => {
+  const confirmed = await modal.confirm(t('settings.logoutConfirm'))
+  if (confirmed) {
     logout()
   }
 }
 
-const updateCredentials = () => {
+const updateCredentials = async () => {
   if (!currentPassword.value) {
-    alert('Please enter your current password')
+    await modal.alert(t('settings.enterCurrentPassword'))
     return
   }
 
   if (newPassword.value && newPassword.value !== confirmPassword.value) {
-    alert('New passwords do not match')
+    await modal.alert(t('settings.passwordsNotMatch'))
     return
   }
 
   if (!newUsername.value && !newPassword.value) {
-    alert('Please enter new username or password')
+    await modal.alert(t('settings.enterNewCredentials'))
     return
   }
 
@@ -317,7 +323,7 @@ const updateCredentials = () => {
   })
 
   // TODO: Implement API call
-  alert('Credentials updated successfully!')
+  await modal.alert(t('settings.credentialsUpdated'))
 
   // Clear form
   currentPassword.value = ''
@@ -326,19 +332,20 @@ const updateCredentials = () => {
   confirmPassword.value = ''
 }
 
-const addGithubAccount = () => {
+const addGithubAccount = async () => {
   console.log('Adding GitHub account...')
   // Will implement OAuth flow later
-  alert('GitHub OAuth flow will be implemented')
+  await modal.alert(t('settings.githubOauthTodo'))
 }
 
-const refreshAccount = (id) => {
+const refreshAccount = async (id) => {
   console.log('Refreshing account:', id)
-  alert('Account refreshed!')
+  await modal.alert(t('settings.accountRefreshed'))
 }
 
-const removeAccount = (id) => {
-  if (confirm('Are you sure you want to remove this GitHub account?')) {
+const removeAccount = async (id) => {
+  const confirmed = await modal.confirm(t('settings.removeAccountConfirm'))
+  if (confirmed) {
     const index = githubAccounts.value.findIndex(a => a.id === id)
     if (index !== -1) {
       githubAccounts.value.splice(index, 1)
@@ -346,31 +353,33 @@ const removeAccount = (id) => {
   }
 }
 
-const saveDeploymentSettings = () => {
+const saveDeploymentSettings = async () => {
   console.log('Saving deployment settings...', {
     basePort: basePort.value,
     defaultBuildCommand: defaultBuildCommand.value,
     defaultOutputDir: defaultOutputDir.value,
     autoInstall: autoInstall.value
   })
-  alert('Deployment settings saved!')
+  await modal.alert(t('settings.settingsSaved'))
 }
 
-const clearCache = () => {
-  if (confirm('Are you sure you want to clear the build cache?')) {
+const clearCache = async () => {
+  const confirmed = await modal.confirm(t('settings.clearCacheConfirm'))
+  if (confirmed) {
     console.log('Clearing build cache...')
     storageData.value.cache = 0
     storageData.value.total = storageData.value.projects + storageData.value.logs
-    alert('Build cache cleared!')
+    await modal.alert(t('settings.cacheCleared'))
   }
 }
 
-const clearLogs = () => {
-  if (confirm('Are you sure you want to clear old logs?')) {
+const clearLogs = async () => {
+  const confirmed = await modal.confirm(t('settings.clearLogsConfirm'))
+  if (confirmed) {
     console.log('Clearing logs...')
     storageData.value.logs = 0
     storageData.value.total = storageData.value.projects + storageData.value.cache
-    alert('Logs cleared!')
+    await modal.alert(t('settings.logsCleared'))
   }
 }
 

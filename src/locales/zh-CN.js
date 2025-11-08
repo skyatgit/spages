@@ -13,7 +13,8 @@ export default {
     success: '操作成功',
     error: '操作失败',
     logout: '退出登录',
-    refresh: '刷新'
+    refresh: '刷新',
+    tip: '提示'
   },
 
   nav: {
@@ -172,6 +173,10 @@ export default {
     platform: '平台',
     dataDirectory: '数据目录',
 
-    logoutConfirm: '确定要退出登录吗？'
+    logoutConfirm: '确定要退出登录吗？',
+    enterCurrentPassword: '请输入当前密码',
+    passwordsNotMatch: '两次输入的密码不一致',
+    enterNewCredentials: '请输入新用户名或密码',
+    githubOauthTodo: '即将实现 GitHub OAuth 功能'
   }
 }

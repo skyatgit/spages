@@ -140,8 +140,10 @@ import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LogViewer from '@/components/LogViewer.vue'
+import { useModal } from '@/utils/modal'
 
 const { t } = useI18n()
+const modal = useModal()
 
 const route = useRoute()
 const router = useRouter()
@@ -220,8 +222,9 @@ const deploy = () => {
   }, 3000)
 }
 
-const deleteProject = () => {
-  if (confirm(t('projectDetail.deleteConfirm'))) {
+const deleteProject = async () => {
+  const confirmed = await modal.confirm(t('projectDetail.deleteConfirm'))
+  if (confirmed) {
     console.log('Deleting project:', projectId)
     router.push('/')
   }
@@ -264,9 +267,9 @@ const toggleEnvVisibility = (key) => {
   envVars.value[key].hidden = !envVars.value[key].hidden
 }
 
-const saveEnvVars = () => {
+const saveEnvVars = async () => {
   console.log('Saving environment variables:', envVars.value)
-  alert(t('common.success'))
+  await modal.alert(t('common.success'))
 }
 </script>
 

@@ -13,7 +13,8 @@ export default {
     success: 'Success',
     error: 'Error',
     logout: 'Logout',
-    refresh: 'Refresh'
+    refresh: 'Refresh',
+    tip: 'Tip'
   },
 
   nav: {
@@ -172,6 +173,10 @@ export default {
     platform: 'Platform',
     dataDirectory: 'Data Directory',
 
-    logoutConfirm: 'Are you sure you want to logout?'
+    logoutConfirm: 'Are you sure you want to logout?',
+    enterCurrentPassword: 'Please enter your current password',
+    passwordsNotMatch: 'New passwords do not match',
+    enterNewCredentials: 'Please enter new username or password',
+    githubOauthTodo: 'GitHub OAuth flow will be implemented'
   }
 }
