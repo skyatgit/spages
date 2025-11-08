@@ -9,7 +9,7 @@
         <div class="header-actions">
           <StatusBadge :status="project.status" />
           <router-link to="/" class="btn btn-secondary">
-            ← Back
+            ← {{ $t('projectDetail.backButton') }}
           </router-link>
         </div>
       </div>
@@ -17,45 +17,45 @@
       <div class="content-grid">
         <!-- Project Info Card -->
         <div class="info-card">
-          <h2>Project Information</h2>
+          <h2>{{ $t('projectDetail.projectInfo') }}</h2>
           <div class="info-grid">
             <div class="info-item">
-              <label>Repository</label>
+              <label>{{ $t('projectDetail.repository') }}</label>
               <a :href="`https://github.com/${project.repository}`" target="_blank" class="link">
                 {{ project.repository }}
               </a>
             </div>
             <div class="info-item">
-              <label>Branch</label>
+              <label>{{ $t('projectDetail.branch') }}</label>
               <span>{{ project.branch }}</span>
             </div>
             <div class="info-item">
-              <label>Port</label>
-              <span>{{ project.port || 'Not assigned' }}</span>
+              <label>{{ $t('projectDetail.port') }}</label>
+              <span>{{ project.port || $t('projectDetail.notAssigned') }}</span>
             </div>
             <div class="info-item">
-              <label>Last Deploy</label>
+              <label>{{ $t('projectDetail.lastDeploy') }}</label>
               <span>{{ formatDate(project.lastDeploy) }}</span>
             </div>
             <div class="info-item">
-              <label>Build Command</label>
+              <label>{{ $t('projectDetail.buildCommand') }}</label>
               <code>{{ project.buildCommand || 'npm run build' }}</code>
             </div>
             <div class="info-item">
-              <label>Output Directory</label>
+              <label>{{ $t('projectDetail.outputDir') }}</label>
               <code>{{ project.outputDir || 'dist' }}</code>
             </div>
           </div>
 
           <div class="info-actions">
             <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-secondary">
-              🔗 Visit Site
+              🔗 {{ $t('projectDetail.visitSite') }}
             </a>
             <button class="btn btn-primary" @click="deploy" :disabled="isDeploying">
-              {{ isDeploying ? '🔄 Deploying...' : '🚀 Deploy Now' }}
+              {{ isDeploying ? '🔄 ' + $t('projectDetail.deploying') : '🚀 ' + $t('projectDetail.deployNow') }}
             </button>
             <button class="btn btn-danger" @click="deleteProject">
-              🗑️ Delete Project
+              🗑️ {{ $t('projectDetail.deleteProject') }}
             </button>
           </div>
         </div>
@@ -72,9 +72,9 @@
 
         <!-- Deployment History -->
         <div class="history-card">
-          <h2>Deployment History</h2>
+          <h2>{{ $t('projectDetail.deploymentHistory') }}</h2>
           <div v-if="deploymentHistory.length === 0" class="empty-history">
-            No deployment history yet
+            {{ $t('projectDetail.noHistory') }}
           </div>
           <div v-else class="history-list">
             <div
@@ -88,7 +88,7 @@
                 <span class="history-commit">{{ deployment.commit }}</span>
               </div>
               <button class="btn-link" @click="viewLogs(deployment.id)">
-                View Logs
+                {{ $t('projectDetail.viewLogs') }}
               </button>
             </div>
           </div>
@@ -96,9 +96,9 @@
 
         <!-- Environment Variables -->
         <div class="env-card">
-          <h2>Environment Variables</h2>
+          <h2>{{ $t('projectDetail.envVars') }}</h2>
           <p class="env-description">
-            Configure environment variables for your project build
+            {{ $t('projectDetail.envVarsDesc') }}
           </p>
           <div class="env-list">
             <div
@@ -106,12 +106,12 @@
               :key="key"
               class="env-item"
             >
-              <input v-model="envVars[key].key" class="env-key" placeholder="KEY" />
+              <input v-model="envVars[key].key" class="env-key" :placeholder="$t('projectDetail.keyPlaceholder')" />
               <input
                 v-model="envVars[key].value"
                 :type="envVars[key].hidden ? 'password' : 'text'"
                 class="env-value"
-                placeholder="value"
+                :placeholder="$t('projectDetail.valuePlaceholder')"
               />
               <button class="btn-icon" @click="toggleEnvVisibility(key)">
                 {{ envVars[key].hidden ? '👁️' : '🙈' }}
@@ -122,10 +122,10 @@
             </div>
           </div>
           <button class="btn btn-secondary btn-small" @click="addEnv">
-            ➕ Add Variable
+            ➕ {{ $t('projectDetail.addVariable') }}
           </button>
           <button class="btn btn-primary btn-small" @click="saveEnvVars">
-            💾 Save
+            💾 {{ $t('common.save') }}
           </button>
         </div>
       </div>
@@ -136,9 +136,12 @@
 <script setup>
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LogViewer from '@/components/LogViewer.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -199,7 +202,7 @@ const envVars = ref({
 })
 
 const formatDate = (date) => {
-  if (!date) return 'Never'
+  if (!date) return t('dashboard.never')
   return new Date(date).toLocaleString()
 }
 
@@ -218,7 +221,7 @@ const deploy = () => {
 }
 
 const deleteProject = () => {
-  if (confirm('Are you sure you want to delete this project?')) {
+  if (confirm(t('projectDetail.deleteConfirm'))) {
     console.log('Deleting project:', projectId)
     router.push('/')
   }
@@ -263,7 +266,7 @@ const toggleEnvVisibility = (key) => {
 
 const saveEnvVars = () => {
   console.log('Saving environment variables:', envVars.value)
-  alert('Environment variables saved!')
+  alert(t('common.success'))
 }
 </script>
 
@@ -315,12 +318,13 @@ const saveEnvVars = () => {
 }
 
 .btn-primary {
-  background: #3498db;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #2980b9;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .btn-primary:disabled {

@@ -3,27 +3,27 @@
     <div class="add-project">
       <div class="page-header">
         <div>
-          <h1>Add New Project</h1>
-          <p class="subtitle">Import a project from GitHub to deploy</p>
+          <h1>{{ $t('addProject.title') }}</h1>
+          <p class="subtitle">{{ $t('addProject.subtitle') }}</p>
         </div>
         <router-link to="/" class="btn btn-secondary">
-          ← Back to Dashboard
+          ← {{ $t('addProject.backToDashboard') }}
         </router-link>
       </div>
 
       <div class="content-card">
         <div v-if="!isGithubConnected" class="github-connect">
           <div class="github-icon">🔗</div>
-          <h2>Connect to GitHub</h2>
-          <p>You need to connect your GitHub account to import repositories</p>
+          <h2>{{ $t('addProject.connectGithub') }}</h2>
+          <p>{{ $t('addProject.connectGithubDesc') }}</p>
           <button class="btn btn-primary btn-large" @click="connectGithub">
-            Connect GitHub Account
+            {{ $t('addProject.connectButton') }}
           </button>
         </div>
 
         <div v-else class="repo-selection">
           <div class="account-selector">
-            <label>Select GitHub Account</label>
+            <label>{{ $t('addProject.selectAccount') }}</label>
             <select v-model="selectedAccount" class="account-select" @change="loadRepositories">
               <option v-for="account in githubAccounts" :key="account.id" :value="account.id">
                 {{ account.username }} ({{ account.email }})
@@ -35,18 +35,18 @@
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Search repositories..."
+              :placeholder="$t('addProject.searchRepos')"
               class="search-input"
             />
           </div>
 
           <div v-if="loading" class="loading">
             <div class="spinner"></div>
-            <p>Loading repositories...</p>
+            <p>{{ $t('addProject.loadingRepos') }}</p>
           </div>
 
           <div v-else-if="filteredRepos.length === 0" class="no-repos">
-            <p>No repositories found</p>
+            <p>{{ $t('addProject.noRepos') }}</p>
           </div>
 
           <div v-else class="repos-list">
@@ -59,7 +59,7 @@
             >
               <div class="repo-info">
                 <h3>{{ repo.name }}</h3>
-                <p class="repo-description">{{ repo.description || 'No description' }}</p>
+                <p class="repo-description">{{ repo.description || $t('addProject.noDescription') }}</p>
                 <div class="repo-meta">
                   <span class="meta-item">⭐ {{ repo.stars }}</span>
                   <span class="meta-item">🔀 {{ repo.forks }}</span>
@@ -72,10 +72,10 @@
           </div>
 
           <div v-if="selectedRepo" class="project-config">
-            <h3>Project Configuration</h3>
+            <h3>{{ $t('addProject.projectConfig') }}</h3>
 
             <div class="form-group">
-              <label>Project Name</label>
+              <label>{{ $t('addProject.projectName') }}</label>
               <input
                 v-model="projectName"
                 type="text"
@@ -85,7 +85,7 @@
             </div>
 
             <div class="form-group">
-              <label>Branch</label>
+              <label>{{ $t('addProject.branch') }}</label>
               <input
                 v-model="branch"
                 type="text"
@@ -95,28 +95,28 @@
             </div>
 
             <div class="form-group">
-              <label>Build Command (optional)</label>
+              <label>{{ $t('addProject.buildCommand') }}</label>
               <input
                 v-model="buildCommand"
                 type="text"
                 class="form-input"
-                placeholder="npm run build (auto-detected)"
+                :placeholder="$t('addProject.buildCommandPlaceholder')"
               />
             </div>
 
             <div class="form-group">
-              <label>Output Directory (optional)</label>
+              <label>{{ $t('addProject.outputDir') }}</label>
               <input
                 v-model="outputDir"
                 type="text"
                 class="form-input"
-                placeholder="dist (auto-detected)"
+                :placeholder="$t('addProject.outputDirPlaceholder')"
               />
             </div>
 
             <div class="form-actions">
-              <button class="btn btn-secondary" @click="cancel">Cancel</button>
-              <button class="btn btn-primary" @click="addProject">Add Project</button>
+              <button class="btn btn-secondary" @click="cancel">{{ $t('common.cancel') }}</button>
+              <button class="btn btn-primary" @click="addProject">{{ $t('common.add') }}</button>
             </div>
           </div>
         </div>

@@ -3,34 +3,34 @@
     <div class="settings">
       <div class="page-header">
         <div>
-          <h1>Settings</h1>
-          <p class="subtitle">Configure your deployment platform</p>
+          <h1>{{ $t('settings.title') }}</h1>
+          <p class="subtitle">{{ $t('settings.subtitle') }}</p>
         </div>
         <button class="btn btn-secondary" @click="handleLogout">
-          🚪 Logout
+          🚪 {{ $t('common.logout') }}
         </button>
       </div>
 
       <div class="settings-grid">
         <!-- Admin Credentials -->
         <div class="settings-card">
-          <h2>Administrator Credentials</h2>
+          <h2>{{ $t('settings.adminSection') }}</h2>
           <p class="card-description">
-            Change your login username and password
+            {{ $t('settings.adminDesc') }}
           </p>
 
           <div class="form-group">
-            <label>Current Password</label>
+            <label>{{ $t('settings.currentPassword') }}</label>
             <input
               v-model="currentPassword"
               type="password"
               class="form-input"
-              placeholder="Enter current password"
+              :placeholder="$t('settings.currentPassword')"
             />
           </div>
 
           <div class="form-group">
-            <label>New Username</label>
+            <label>{{ $t('settings.newUsername') }}</label>
             <input
               v-model="newUsername"
               type="text"
@@ -40,35 +40,35 @@
           </div>
 
           <div class="form-group">
-            <label>New Password</label>
+            <label>{{ $t('settings.newPassword') }}</label>
             <input
               v-model="newPassword"
               type="password"
               class="form-input"
-              placeholder="Enter new password"
+              :placeholder="$t('settings.newPassword')"
             />
           </div>
 
           <div class="form-group">
-            <label>Confirm New Password</label>
+            <label>{{ $t('settings.confirmPassword') }}</label>
             <input
               v-model="confirmPassword"
               type="password"
               class="form-input"
-              placeholder="Confirm new password"
+              :placeholder="$t('settings.confirmPassword')"
             />
           </div>
 
           <button class="btn btn-primary" @click="updateCredentials">
-            💾 Update Credentials
+            💾 {{ $t('settings.updateCredentials') }}
           </button>
         </div>
 
         <!-- GitHub Accounts -->
         <div class="settings-card">
-          <h2>GitHub Accounts</h2>
+          <h2>{{ $t('settings.githubSection') }}</h2>
           <p class="card-description">
-            Manage multiple GitHub accounts for accessing repositories
+            {{ $t('settings.githubDesc') }}
           </p>
 
           <div class="github-accounts-list">
@@ -86,41 +86,41 @@
                   <div class="account-username">{{ account.username }}</div>
                   <div class="account-email">{{ account.email }}</div>
                   <div class="account-meta">
-                    Connected on {{ formatDate(account.connectedAt) }}
+                    {{ $t('settings.connectedOn') }} {{ formatDate(account.connectedAt) }}
                   </div>
                 </div>
               </div>
               <div class="account-actions">
-                <button class="btn-icon" @click="refreshAccount(account.id)" title="Refresh">
+                <button class="btn-icon" @click="refreshAccount(account.id)" :title="$t('common.refresh')">
                   🔄
                 </button>
-                <button class="btn-icon" @click="removeAccount(account.id)" title="Remove">
+                <button class="btn-icon" @click="removeAccount(account.id)" :title="$t('common.delete')">
                   🗑️
                 </button>
               </div>
             </div>
 
             <div v-if="githubAccounts.length === 0" class="no-accounts">
-              <p>No GitHub accounts connected</p>
+              <p>{{ $t('settings.noAccounts') }}</p>
             </div>
           </div>
 
           <button class="btn btn-primary" @click="addGithubAccount">
-            ➕ Connect GitHub Account
+            ➕ {{ $t('settings.addAccount') }}
           </button>
         </div>
 
         <!-- Deployment Settings -->
         <div class="settings-card">
-          <h2>Deployment Settings</h2>
+          <h2>{{ $t('settings.deploymentSection') }}</h2>
           <p class="card-description">
-            Configure default settings for project deployments
+            {{ $t('settings.deploymentDesc') }}
           </p>
 
           <div class="form-group">
-            <label>Base Port</label>
+            <label>{{ $t('settings.basePort') }}</label>
             <p class="field-description">
-              Starting port number for deployed projects
+              {{ $t('settings.basePortDesc') }}
             </p>
             <input
               v-model.number="basePort"
@@ -131,9 +131,9 @@
           </div>
 
           <div class="form-group">
-            <label>Default Build Command</label>
+            <label>{{ $t('settings.defaultBuildCommand') }}</label>
             <p class="field-description">
-              Command to run when building projects (can be overridden per project)
+              {{ $t('settings.defaultBuildCommandDesc') }}
             </p>
             <input
               v-model="defaultBuildCommand"
@@ -144,9 +144,9 @@
           </div>
 
           <div class="form-group">
-            <label>Default Output Directory</label>
+            <label>{{ $t('settings.defaultOutputDir') }}</label>
             <p class="field-description">
-              Directory where build output is located
+              {{ $t('settings.defaultOutputDirDesc') }}
             </p>
             <input
               v-model="defaultOutputDir"
@@ -159,76 +159,76 @@
           <div class="form-group">
             <label>
               <input v-model="autoInstall" type="checkbox" class="checkbox" />
-              Auto-install dependencies
+              {{ $t('settings.autoInstall') }}
             </label>
             <p class="field-description">
-              Automatically run npm install before building
+              {{ $t('settings.autoInstallDesc') }}
             </p>
           </div>
 
           <button class="btn btn-primary" @click="saveDeploymentSettings">
-            💾 Save Settings
+            💾 {{ $t('common.save') }}
           </button>
         </div>
 
         <!-- Storage & Cleanup -->
         <div class="settings-card">
-          <h2>Storage & Cleanup</h2>
+          <h2>{{ $t('settings.storageSection') }}</h2>
           <p class="card-description">
-            Manage storage and cleanup policies
+            {{ $t('settings.storageDesc') }}
           </p>
 
           <div class="storage-info">
             <div class="storage-item">
-              <div class="storage-label">Projects Data</div>
+              <div class="storage-label">{{ $t('settings.projectsData') }}</div>
               <div class="storage-value">{{ storageData.projects }} MB</div>
             </div>
             <div class="storage-item">
-              <div class="storage-label">Build Cache</div>
+              <div class="storage-label">{{ $t('settings.buildCache') }}</div>
               <div class="storage-value">{{ storageData.cache }} MB</div>
             </div>
             <div class="storage-item">
-              <div class="storage-label">Logs</div>
+              <div class="storage-label">{{ $t('settings.logs') }}</div>
               <div class="storage-value">{{ storageData.logs }} MB</div>
             </div>
             <div class="storage-item">
-              <div class="storage-label">Total</div>
+              <div class="storage-label">{{ $t('settings.total') }}</div>
               <div class="storage-value total">{{ storageData.total }} MB</div>
             </div>
           </div>
 
           <div class="cleanup-actions">
             <button class="btn btn-secondary" @click="clearCache">
-              🗑️ Clear Build Cache
+              🗑️ {{ $t('settings.clearCache') }}
             </button>
             <button class="btn btn-secondary" @click="clearLogs">
-              🗑️ Clear Old Logs
+              🗑️ {{ $t('settings.clearLogs') }}
             </button>
           </div>
         </div>
 
         <!-- System Information -->
         <div class="settings-card">
-          <h2>System Information</h2>
+          <h2>{{ $t('settings.systemSection') }}</h2>
           <p class="card-description">
-            Platform and runtime information
+            {{ $t('settings.systemDesc') }}
           </p>
 
           <div class="info-grid">
             <div class="info-item">
-              <label>Platform Version</label>
+              <label>{{ $t('settings.platformVersion') }}</label>
               <span>SPages v0.1.0</span>
             </div>
             <div class="info-item">
-              <label>Node.js Version</label>
+              <label>{{ $t('settings.nodeVersion') }}</label>
               <span>{{ systemInfo.nodeVersion }}</span>
             </div>
             <div class="info-item">
-              <label>Platform</label>
+              <label>{{ $t('settings.platform') }}</label>
               <span>{{ systemInfo.platform }}</span>
             </div>
             <div class="info-item">
-              <label>Data Directory</label>
+              <label>{{ $t('settings.dataDirectory') }}</label>
               <code>{{ systemInfo.dataDir }}</code>
             </div>
           </div>

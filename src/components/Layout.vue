@@ -20,13 +20,12 @@
           <span>{{ $t('nav.settings') }}</span>
         </router-link>
       </nav>
-
-      <div class="sidebar-footer">
-        <LanguageSwitcher />
-      </div>
     </aside>
 
     <main class="main-content">
+      <div class="language-switcher-wrapper">
+        <LanguageSwitcher />
+      </div>
       <slot></slot>
     </main>
   </div>
@@ -39,17 +38,21 @@ import LanguageSwitcher from './LanguageSwitcher.vue'
 <style scoped>
 .layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
 .sidebar {
   width: 250px;
-  background: #2c3e50;
+  background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
   color: white;
   padding: 20px;
-  position: fixed;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .logo {
@@ -61,57 +64,62 @@ import LanguageSwitcher from './LanguageSwitcher.vue'
 .logo h2 {
   font-size: 28px;
   margin-bottom: 5px;
+  font-weight: 700;
 }
 
 .logo p {
   font-size: 12px;
-  color: #95a5a6;
+  color: #bdc3c7;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
+  flex: 1;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 15px;
+  padding: 14px 16px;
   color: #ecf0f1;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 10px;
   transition: all 0.3s ease;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .nav-item:hover {
   background: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
 }
 
 .nav-item.router-link-active {
-  background: #3498db;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .nav-item .icon {
   font-size: 20px;
 }
 
-.sidebar-footer {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  right: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
 .main-content {
   flex: 1;
-  margin-left: 250px;
+  height: 100vh;
+  overflow-y: auto;
+  background: #f5f7fa;
   padding: 30px;
-  background: #f5f5f5;
-  min-height: 100vh;
+  position: relative;
+}
+
+.language-switcher-wrapper {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
 }
 </style>

@@ -3,20 +3,20 @@
     <div class="dashboard">
       <div class="page-header">
         <div>
-          <h1>Projects</h1>
-          <p class="subtitle">Manage and deploy your frontend projects</p>
+          <h1>{{ $t('dashboard.title') }}</h1>
+          <p class="subtitle">{{ $t('dashboard.subtitle') }}</p>
         </div>
         <router-link to="/add-project" class="btn btn-primary">
-          ➕ Add Project
+          ➕ {{ $t('dashboard.addProject') }}
         </router-link>
       </div>
 
       <div v-if="projects.length === 0" class="empty-state">
         <div class="empty-icon">📦</div>
-        <h2>No Projects Yet</h2>
-        <p>Get started by adding your first project from GitHub</p>
+        <h2>{{ $t('dashboard.noProjects') }}</h2>
+        <p>{{ $t('dashboard.noProjectsDesc') }}</p>
         <router-link to="/add-project" class="btn btn-primary">
-          Add Your First Project
+          {{ $t('dashboard.addFirstProject') }}
         </router-link>
       </div>
 
@@ -113,11 +113,11 @@ const handleDeploy = (id) => {
 }
 
 .btn {
-  padding: 10px 20px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   text-decoration: none;
@@ -125,14 +125,13 @@ const handleDeploy = (id) => {
 }
 
 .btn-primary {
-  background: #3498db;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #2980b9;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .empty-state {

@@ -7,36 +7,39 @@
 
     <div class="card-body">
       <div class="info-row">
-        <span class="label">Repository:</span>
+        <span class="label">{{ $t('dashboard.repository') }}:</span>
         <span class="value">{{ project.repository }}</span>
       </div>
       <div class="info-row">
-        <span class="label">Branch:</span>
+        <span class="label">{{ $t('dashboard.branch') }}:</span>
         <span class="value">{{ project.branch || 'main' }}</span>
       </div>
       <div class="info-row">
-        <span class="label">Port:</span>
+        <span class="label">{{ $t('dashboard.port') }}:</span>
         <span class="value">{{ project.port || '-' }}</span>
       </div>
       <div class="info-row">
-        <span class="label">Last Deploy:</span>
+        <span class="label">{{ $t('dashboard.lastDeploy') }}:</span>
         <span class="value">{{ formatDate(project.lastDeploy) }}</span>
       </div>
     </div>
 
     <div class="card-footer">
       <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-small" @click.stop>
-        Visit Site
+        {{ $t('dashboard.visitSite') }}
       </a>
       <button class="btn btn-small btn-primary" @click.stop="$emit('deploy', project.id)">
-        Deploy
+        {{ $t('dashboard.deploy') }}
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
 import StatusBadge from './StatusBadge.vue'
+
+const { t: $t } = useI18n()
 
 defineProps({
   project: {
@@ -52,8 +55,8 @@ const handleClick = () => {
 }
 
 const formatDate = (date) => {
-  if (!date) return 'Never'
-  return new Date(date).toLocaleString()
+  if (!date) return $t('dashboard.never')
+  return new Date(date).toLocaleString('zh-CN')
 }
 </script>
 
@@ -132,12 +135,12 @@ const formatDate = (date) => {
 }
 
 .btn-primary {
-  background: #3498db;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #2980b9;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .btn:not(.btn-primary) {

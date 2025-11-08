@@ -2,16 +2,23 @@ import express from 'express'
 import cors from 'cors'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { initApp } from './utils/init.js'
+import authRoutes from './routes/auth.js'
+import { authMiddleware } from './utils/auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3000
 
+// Initialize application
+await initApp()
+
 // Middleware
 app.use(cors())
 app.use(express.json())
 
-// API Routes will be added here
+// API Routes
+app.use('/api/auth', authRoutes)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
 })

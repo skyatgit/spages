@@ -3,10 +3,10 @@
     <div class="log-header">
       <h3>{{ title }}</h3>
       <div class="log-actions">
-        <button class="btn-icon" @click="clearLogs" title="Clear logs">
+        <button class="btn-icon" @click="clearLogs" :title="$t('projectDetail.clearLogs')">
           🗑️
         </button>
-        <button class="btn-icon" @click="downloadLogs" title="Download logs">
+        <button class="btn-icon" @click="downloadLogs" :title="$t('projectDetail.downloadLogs')">
           ⬇️
         </button>
       </div>
@@ -14,7 +14,7 @@
 
     <div class="log-content" ref="logContainer">
       <div v-if="logs.length === 0" class="no-logs">
-        No logs available
+        {{ $t('projectDetail.noLogs') }}
       </div>
       <div v-else>
         <div
@@ -33,6 +33,9 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t: $t } = useI18n()
 
 const props = defineProps({
   logs: {

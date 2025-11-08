@@ -24,7 +24,9 @@
     "cors": "^2.8.5",
     "simple-git": "^3.27.0",
     "tar": "^7.4.3",
-    "sirv": "^2.0.4"
+    "sirv": "^2.0.4",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
