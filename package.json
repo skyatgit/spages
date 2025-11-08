@@ -1,0 +1,35 @@
+{
+  "name": "spages",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node server/index.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
+    "build": "vite build",
+    "build:server": "pkg server/index.js --targets node20-linux-x64,node20-win-x64 --output dist-release/spages",
+    "build:all": "node scripts/build.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.22",
+    "vue-router": "^4.5.0",
+    "axios": "^1.7.9",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "simple-git": "^3.27.0",
+    "tar": "^7.4.3",
+    "sirv": "^2.0.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "vite": "^7.1.11",
+    "vite-plugin-vue-devtools": "^8.0.3",
+    "pkg": "^5.8.1",
+    "concurrently": "^9.1.2"
+  }
+}
