@@ -2,6 +2,7 @@ import express from 'express'
 import { authMiddleware } from '../utils/auth.js'
 import {
   deployProjectV3,
+  startServerV3,
   stopServerV3,
   getDeploymentLogs,
   getDeploymentHistory,
@@ -298,6 +299,42 @@ router.post('/:id/deploy', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Error starting deployment:', error)
     res.status(500).json({ error: 'Failed to start deployment' })
+  }
+})
+
+// Start a project (without redeploying)
+router.post('/:id/start', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params
+    console.log(`[Start Project] Received request to start project: ${id}`)
+
+    const projectConfig = new ProjectConfig(id)
+    const project = projectConfig.read()
+
+    if (!project) {
+      console.error(`[Start Project] Project not found: ${id}`)
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      })
+    }
+
+    console.log(`[Start Project] Project found: ${project.name}`)
+
+    // 启动服务器
+    await startServerV3(id)
+
+    console.log(`[Start Project] Project started successfully: ${id}`)
+    res.json({
+      success: true,
+      message: 'Project started successfully'
+    })
+  } catch (error) {
+    console.error(`[Start Project] Error: ${error.message}`)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to start server process'
+    })
   }
 })
 

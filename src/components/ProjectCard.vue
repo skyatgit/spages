@@ -25,28 +25,24 @@
     </div>
 
     <div class="card-footer">
-      <button class="btn btn-small btn-delete" @click.stop="$emit('delete', project.id)" title="删除项目">
-        🗑️
-      </button>
-      <button class="btn btn-small btn-edit" @click.stop="$emit('edit', project)" title="编辑配置">
-        ⚙️
-      </button>
-      <button class="btn btn-small btn-logs" @click.stop="handleClick" title="查看详情和日志">
-        📋
-      </button>
-      <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-small" @click.stop>
-        {{ $t('dashboard.visitSite') }}
+      <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-small btn-visit" @click.stop>
+        🔗 {{ $t('dashboard.visitSite') }}
       </a>
       <button
         v-if="project.status === 'running'"
         class="btn btn-small btn-stop"
         @click.stop="$emit('stop', project.id)"
-        title="停止项目"
+        :title="$t('dashboard.stopProject')"
       >
         ⏹️ {{ $t('dashboard.stop') }}
       </button>
-      <button class="btn btn-small btn-primary" @click.stop="$emit('deploy', project.id)">
-        {{ $t('dashboard.deploy') }}
+      <button
+        v-else-if="project.status === 'stopped'"
+        class="btn btn-small btn-start"
+        @click.stop="$emit('start', project.id)"
+        :title="$t('dashboard.startProject')"
+      >
+        ▶️ {{ $t('dashboard.start') }}
       </button>
     </div>
   </div>
@@ -65,7 +61,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['click', 'deploy', 'edit', 'delete', 'stop'])
+const emit = defineEmits(['click', 'start', 'stop'])
 
 const handleClick = () => {
   emit('click', props.project.id)
@@ -169,48 +165,30 @@ const formatDate = (date) => {
   background: #bdc3c7;
 }
 
-.btn-edit {
-  background: #f39c12;
-  color: white;
-  font-size: 16px;
-  padding: 6px 10px;
-}
-
-.btn-edit:hover {
-  background: #e67e22;
-  transform: scale(1.1);
-}
-
-.btn-delete {
-  background: #e74c3c;
-  color: white;
-  font-size: 16px;
-  padding: 6px 10px;
-}
-
-.btn-delete:hover {
-  background: #c0392b;
-  transform: scale(1.1);
-}
-
-.btn-logs {
+.btn-visit {
   background: #3498db;
   color: white;
-  font-size: 16px;
-  padding: 6px 10px;
 }
 
-.btn-logs:hover {
+.btn-visit:hover {
   background: #2980b9;
-  transform: scale(1.1);
 }
 
 .btn-stop {
-  background: #e67e22;
+  background: #e74c3c;
   color: white;
 }
 
 .btn-stop:hover {
-  background: #d35400;
+  background: #c0392b;
+}
+
+.btn-start {
+  background: #27ae60;
+  color: white;
+}
+
+.btn-start:hover {
+  background: #229954;
 }
 </style>

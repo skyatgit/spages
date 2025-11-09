@@ -26,19 +26,11 @@
           :key="project.id"
           :project="project"
           @click="goToProject(project.id)"
-          @deploy="handleDeploy(project.id)"
-          @edit="handleEdit"
-          @delete="handleDelete"
+          @start="handleStart"
           @stop="handleStop"
         />
       </div>
     </div>
-
-    <EditProjectModal
-      v-model="showEditModal"
-      :project="editingProject"
-      @save="handleSaveProject"
-    />
 
     <DeleteProgressModal
       ref="deleteProgressModal"
@@ -60,18 +52,15 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
-import EditProjectModal from '@/components/EditProjectModal.vue'
 import DeleteProgressModal from '@/components/DeleteProgressModal.vue'
 import StopProgressModal from '@/components/StopProgressModal.vue'
 import { useModal } from '@/utils/modal'
-import { projectsAPI, deployProject } from '@/api/projects'
+import { projectsAPI } from '@/api/projects'
 
 const router = useRouter()
 const modal = useModal()
 const { t } = useI18n()
 
-const showEditModal = ref(false)
-const editingProject = ref(null)
 const projects = ref([])
 const loading = ref(true)
 const showDeleteProgress = ref(false)
@@ -118,50 +107,15 @@ const goToProject = (id) => {
   router.push(`/project/${id}`)
 }
 
-const handleDeploy = async (id) => {
+const handleStart = async (projectId) => {
   try {
-    // 启动部署（不等待完成）
-    deployProject(id).catch(err => {
-      console.error('Deployment failed:', err)
-    })
-
-    // 立即刷新状态，显示"部署中"
+    await projectsAPI.startProject(projectId)
     await loadProjects()
-
-    await modal.alert(t('dashboard.deploymentStarted'))
+    await modal.alert(t('dashboard.projectStarted'))
   } catch (error) {
-    console.error('Failed to deploy project:', error)
-    await modal.alert(t('dashboard.deploymentFailed'))
-  }
-}
-
-const handleEdit = async (project) => {
-  try {
-    // 从后端获取完整的项目信息（包含 accountId, owner, repo 等）
-    const fullProject = await projectsAPI.getProject(project.id)
-    editingProject.value = fullProject
-    showEditModal.value = true
-  } catch (error) {
-    console.error('Failed to load project details:', error)
-    await modal.alert(t('dashboard.loadProjectFailed'))
-  }
-}
-
-const handleSaveProject = async (updatedProject) => {
-  try {
-    // 发送到后端保存
-    await projectsAPI.updateProject(updatedProject.id, updatedProject)
-
-    // 更新本地项目列表
-    const index = projects.value.findIndex(p => p.id === updatedProject.id)
-    if (index !== -1) {
-      projects.value[index] = { ...projects.value[index], ...updatedProject }
-    }
-
-    await modal.alert(t('dashboard.projectUpdated'))
-  } catch (error) {
-    console.error('Failed to update project:', error)
-    await modal.alert(t('dashboard.projectUpdateFailed'))
+    console.error('Failed to start project:', error)
+    const errorMsg = error.response?.data?.error || error.message
+    await modal.alert(t('dashboard.startFailed') + ': ' + errorMsg)
   }
 }
 

@@ -506,6 +506,53 @@ function startStaticServer(project, distPath, logger) {
 }
 
 /**
+ * Start server - 启动已编译的项目（不重新部署）
+ */
+export async function startServerV3(projectId) {
+  console.log(`[startServerV3] Starting server for project: ${projectId}`)
+
+  const projectConfig = new ProjectConfig(projectId)
+  const project = projectConfig.read()
+
+  if (!project) {
+    throw new Error('Project not found')
+  }
+
+  // 检查是否已经在运行
+  if (runningProcesses.has(projectId)) {
+    console.log(`[startServerV3] Server already running for project: ${projectId}`)
+    return { success: true, message: 'Server already running' }
+  }
+
+  const paths = new ProjectPaths(project.name)
+
+  // 确定输出目录
+  const outputDir = project.outputDir || 'dist'
+  const distPath = path.join(paths.source, outputDir)
+
+  // 检查编译后的文件是否存在
+  if (!fs.existsSync(distPath)) {
+    throw new Error(`Build directory not found: ${outputDir}. Please deploy the project first.`)
+  }
+
+  console.log(`[startServerV3] Starting static server from: ${distPath}`)
+
+  // 使用 DeploymentLogger 的简化版本
+  const logger = {
+    info: (msg) => console.log(`[startServerV3] ${msg}`),
+    success: (msg) => console.log(`[startServerV3] ✅ ${msg}`),
+    error: (msg) => console.error(`[startServerV3] ❌ ${msg}`)
+  }
+
+  // 启动静态服务器
+  await startStaticServer(project, distPath, logger)
+
+  console.log(`[startServerV3] Server started successfully on port ${project.port}`)
+
+  return { success: true, message: 'Server started successfully' }
+}
+
+/**
  * Stop server - 简化版本，只处理 HTTP 服务器
  * 所有项目现在都使用内置的 HTTP 服务器，不再有子进程
  * 这使得停止功能完全跨平台，无需任何平台特定代码

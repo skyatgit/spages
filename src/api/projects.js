@@ -26,6 +26,11 @@ export const projectsAPI = {
     return apiClient.delete(`/projects/${id}`)
   },
 
+  // Start project
+  startProject(id) {
+    return apiClient.post(`/projects/${id}/start`)
+  },
+
   // Stop project
   stopProject(id) {
     return apiClient.post(`/projects/${id}/stop`)

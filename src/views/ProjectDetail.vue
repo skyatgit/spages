@@ -51,8 +51,27 @@
             <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-secondary">
               🔗 {{ $t('projectDetail.visitSite') }}
             </a>
+            <button
+              v-if="project.status === 'stopped'"
+              class="btn btn-success"
+              @click="startProject"
+              :disabled="isStarting"
+            >
+              {{ isStarting ? '🔄 ' + $t('projectDetail.starting') : '▶️ ' + $t('projectDetail.start') }}
+            </button>
+            <button
+              v-if="project.status === 'running'"
+              class="btn btn-warning"
+              @click="stopProject"
+              :disabled="isStopping"
+            >
+              {{ isStopping ? '🔄 ' + $t('projectDetail.stopping') : '⏹️ ' + $t('projectDetail.stop') }}
+            </button>
             <button class="btn btn-primary" @click="deploy" :disabled="isDeploying">
-              {{ isDeploying ? '🔄 ' + $t('projectDetail.deploying') : '🚀 ' + $t('projectDetail.deployNow') }}
+              {{ isDeploying ? '🔄 ' + $t('projectDetail.deploying') : '🔄 ' + $t('projectDetail.redeploy') }}
+            </button>
+            <button class="btn btn-edit" @click="showSettings = true">
+              ⚙️ {{ $t('projectDetail.settings') }}
             </button>
             <button class="btn btn-danger" @click="deleteProject">
               🗑️ {{ $t('projectDetail.deleteProject') }}
@@ -136,6 +155,12 @@
       :show="showDeleteProgress"
       @close="showDeleteProgress = false"
     />
+
+    <EditProjectModal
+      v-model="showSettings"
+      :project="project"
+      @save="handleSaveProject"
+    />
   </Layout>
 </template>
 
@@ -147,6 +172,7 @@ import Layout from '@/components/Layout.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LogViewer from '@/components/LogViewer.vue'
 import DeleteProgressModal from '@/components/DeleteProgressModal.vue'
+import EditProjectModal from '@/components/EditProjectModal.vue'
 import { useModal } from '@/utils/modal'
 import { projectsAPI, deployProject as apiDeployProject, getDeploymentHistory, getEnvVars, updateEnvVars, getProjectLogs } from '@/api/projects'
 
@@ -172,9 +198,12 @@ const project = ref({
 })
 
 const isDeploying = ref(false)
+const isStarting = ref(false)
+const isStopping = ref(false)
 const loading = ref(true)
 const showDeleteProgress = ref(false)
 const deleteProgressModal = ref(null)
+const showSettings = ref(false)
 
 // 定时器引用，用于清理
 let projectRefreshInterval = null
@@ -291,6 +320,35 @@ const formatDate = (date) => {
   return new Date(date).toLocaleString()
 }
 
+const startProject = async () => {
+  try {
+    isStarting.value = true
+    await projectsAPI.startProject(projectId)
+    await modal.alert(t('projectDetail.projectStarted'))
+    await loadProject()
+  } catch (error) {
+    console.error('Failed to start project:', error)
+    const errorMsg = error.response?.data?.error || error.message
+    await modal.alert(t('projectDetail.startFailed') + ': ' + errorMsg)
+  } finally {
+    isStarting.value = false
+  }
+}
+
+const stopProject = async () => {
+  try {
+    isStopping.value = true
+    await projectsAPI.stopProject(projectId)
+    await modal.alert(t('projectDetail.projectStopped'))
+    await loadProject()
+  } catch (error) {
+    console.error('Failed to stop project:', error)
+    await modal.alert(t('projectDetail.stopFailed'))
+  } finally {
+    isStopping.value = false
+  }
+}
+
 const deploy = async () => {
   try {
     isDeploying.value = true
@@ -308,6 +366,17 @@ const deploy = async () => {
     await modal.alert(t('projectDetail.deploymentFailed'))
   } finally {
     isDeploying.value = false
+  }
+}
+
+const handleSaveProject = async (updatedProject) => {
+  try {
+    await projectsAPI.updateProject(updatedProject.id, updatedProject)
+    await modal.alert(t('projectDetail.projectUpdated'))
+    await loadProject()
+  } catch (error) {
+    console.error('Failed to update project:', error)
+    await modal.alert(t('projectDetail.projectUpdateFailed'))
   }
 }
 
@@ -487,6 +556,33 @@ const saveEnvVars = async () => {
 
 .btn-danger:hover {
   background: #c0392b;
+}
+
+.btn-success {
+  background: #27ae60;
+  color: white;
+}
+
+.btn-success:hover {
+  background: #229954;
+}
+
+.btn-warning {
+  background: #f39c12;
+  color: white;
+}
+
+.btn-warning:hover {
+  background: #e67e22;
+}
+
+.btn-edit {
+  background: #3498db;
+  color: white;
+}
+
+.btn-edit:hover {
+  background: #2980b9;
 }
 
 .btn-link {
