@@ -35,7 +35,7 @@
               v-model="newUsername"
               type="text"
               class="form-input"
-              placeholder="admin"
+              :placeholder="$t('settings.newUsername')"
             />
           </div>
 
