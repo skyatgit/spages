@@ -37,12 +37,6 @@
       :show="showDeleteProgress"
       @close="showDeleteProgress = false"
     />
-
-    <StopProgressModal
-      ref="stopProgressModal"
-      :show="showStopProgress"
-      @close="showStopProgress = false"
-    />
   </Layout>
 </template>
 
@@ -53,20 +47,19 @@ import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
 import DeleteProgressModal from '@/components/DeleteProgressModal.vue'
-import StopProgressModal from '@/components/StopProgressModal.vue'
 import { useModal } from '@/utils/modal'
+import { useToast } from '@/utils/toast'
 import { projectsAPI } from '@/api/projects'
 
 const router = useRouter()
 const modal = useModal()
+const toast = useToast()
 const { t } = useI18n()
 
 const projects = ref([])
 const loading = ref(true)
 const showDeleteProgress = ref(false)
 const deleteProgressModal = ref(null)
-const showStopProgress = ref(false)
-const stopProgressModal = ref(null)
 
 // 页面加载时获取项目列表
 onMounted(async () => {
@@ -111,11 +104,11 @@ const handleStart = async (projectId) => {
   try {
     await projectsAPI.startProject(projectId)
     await loadProjects()
-    await modal.alert(t('dashboard.projectStarted'))
+    toast.success(t('dashboard.projectStarted'))
   } catch (error) {
     console.error('Failed to start project:', error)
     const errorMsg = error.response?.data?.error || error.message
-    await modal.alert(t('dashboard.startFailed') + ': ' + errorMsg)
+    toast.error(t('dashboard.startFailed') + ': ' + errorMsg)
   }
 }
 
@@ -145,7 +138,7 @@ const handleDelete = async (projectId) => {
 
     // 完成
     showDeleteProgress.value = false
-    await modal.alert(t('dashboard.projectDeleted'))
+    toast.success(t('dashboard.projectDeleted'))
 
     // 刷新项目列表
     await loadProjects()
@@ -157,36 +150,14 @@ const handleDelete = async (projectId) => {
 }
 
 const handleStop = async (projectId) => {
-  const confirmed = await modal.confirm(t('dashboard.stopConfirm'))
-  if (!confirmed) return
-
-  // 显示进度 Modal
-  showStopProgress.value = true
-  stopProgressModal.value.reset()
-
   try {
-    console.log('[Dashboard] Stopping project:', projectId)
-
-    // Step 1: 关闭 HTTP 服务器
-    stopProgressModal.value.setStep(0)
-    const result = await projectsAPI.stopProject(projectId)
-    console.log('[Dashboard] Stop result:', result)
-
-    // Step 2: 更新项目状态
-    stopProgressModal.value.setStep(1)
-    await new Promise(resolve => setTimeout(resolve, 300))
-
-    // 完成
-    showStopProgress.value = false
-    await modal.alert(t('dashboard.projectStopped'))
-
-    // 刷新项目列表
+    await projectsAPI.stopProject(projectId)
     await loadProjects()
+    toast.success(t('dashboard.projectStopped'))
   } catch (error) {
-    console.error('[Dashboard] Failed to stop project:', error)
-    console.error('[Dashboard] Error details:', error.response?.data || error.message)
+    console.error('Failed to stop project:', error)
     const errorMsg = error.response?.data?.error || error.message
-    stopProgressModal.value.setError(errorMsg)
+    toast.error(t('dashboard.stopFailed') + ': ' + errorMsg)
   }
 }
 </script>

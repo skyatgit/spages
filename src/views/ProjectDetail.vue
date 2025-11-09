@@ -174,10 +174,12 @@ import LogViewer from '@/components/LogViewer.vue'
 import DeleteProgressModal from '@/components/DeleteProgressModal.vue'
 import EditProjectModal from '@/components/EditProjectModal.vue'
 import { useModal } from '@/utils/modal'
+import { useToast } from '@/utils/toast'
 import { projectsAPI, deployProject as apiDeployProject, getDeploymentHistory, getEnvVars, updateEnvVars, getProjectLogs } from '@/api/projects'
 
 const { t } = useI18n()
 const modal = useModal()
+const toast = useToast()
 
 const route = useRoute()
 const router = useRouter()
@@ -324,12 +326,12 @@ const startProject = async () => {
   try {
     isStarting.value = true
     await projectsAPI.startProject(projectId)
-    await modal.alert(t('projectDetail.projectStarted'))
+    toast.success(t('projectDetail.projectStarted'))
     await loadProject()
   } catch (error) {
     console.error('Failed to start project:', error)
     const errorMsg = error.response?.data?.error || error.message
-    await modal.alert(t('projectDetail.startFailed') + ': ' + errorMsg)
+    toast.error(t('projectDetail.startFailed') + ': ' + errorMsg)
   } finally {
     isStarting.value = false
   }
@@ -339,11 +341,11 @@ const stopProject = async () => {
   try {
     isStopping.value = true
     await projectsAPI.stopProject(projectId)
-    await modal.alert(t('projectDetail.projectStopped'))
+    toast.success(t('projectDetail.projectStopped'))
     await loadProject()
   } catch (error) {
     console.error('Failed to stop project:', error)
-    await modal.alert(t('projectDetail.stopFailed'))
+    toast.error(t('projectDetail.stopFailed'))
   } finally {
     isStopping.value = false
   }
@@ -358,12 +360,12 @@ const deploy = async () => {
       timestamp: Date.now(),
       message: 'Deployment started!'
     })
-    await modal.alert(t('projectDetail.deploymentStarted'))
+    toast.success(t('projectDetail.deploymentStarted'))
     // 刷新项目状态
     await loadProject()
   } catch (error) {
     console.error('Deployment failed:', error)
-    await modal.alert(t('projectDetail.deploymentFailed'))
+    toast.error(t('projectDetail.deploymentFailed'))
   } finally {
     isDeploying.value = false
   }
@@ -372,11 +374,11 @@ const deploy = async () => {
 const handleSaveProject = async (updatedProject) => {
   try {
     await projectsAPI.updateProject(updatedProject.id, updatedProject)
-    await modal.alert(t('projectDetail.projectUpdated'))
+    toast.success(t('projectDetail.projectUpdated'))
     await loadProject()
   } catch (error) {
     console.error('Failed to update project:', error)
-    await modal.alert(t('projectDetail.projectUpdateFailed'))
+    toast.error(t('projectDetail.projectUpdateFailed'))
   }
 }
 
@@ -406,7 +408,7 @@ const deleteProject = async () => {
 
     // 完成
     showDeleteProgress.value = false
-    await modal.alert(t('projectDetail.projectDeleted'))
+    toast.success(t('projectDetail.projectDeleted'))
     router.push('/')
   } catch (error) {
     console.error('Failed to delete project:', error)

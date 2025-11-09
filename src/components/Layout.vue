@@ -28,11 +28,14 @@
       </div>
       <slot></slot>
     </main>
+
+    <Toast />
   </div>
 </template>
 
 <script setup>
 import LanguageSwitcher from './LanguageSwitcher.vue'
+import Toast from './Toast.vue'
 </script>
 
 <style scoped>
