@@ -166,10 +166,6 @@
               <label>{{ $t('settings.platform') }}</label>
               <span>{{ systemInfo.platform }}</span>
             </div>
-            <div class="info-item">
-              <label>{{ $t('settings.dataDirectory') }}</label>
-              <code>{{ systemInfo.dataDir }}</code>
-            </div>
           </div>
         </div>
       </div>
@@ -184,11 +180,14 @@ import { useRoute } from 'vue-router'
 import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
+import { useToast } from '@/utils/toast'
 import { getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount } from '@/api/github'
-import { getSystemInfo } from '@/api/system'
+import { getSystemInfo, getStorageInfo, clearCache as clearCacheAPI, clearLogs as clearLogsAPI } from '@/api/system'
+import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
 
 const { t } = useI18n()
 const modal = useModal()
+const toast = useToast()
 const route = useRoute()
 
 // Admin Credentials
@@ -203,18 +202,17 @@ const loadingAccounts = ref(false)
 
 // Storage Data
 const storageData = ref({
-  projects: 245,
-  cache: 512,
-  logs: 8,
-  total: 765
+  projects: 0,
+  cache: 0,
+  logs: 0,
+  total: 0
 })
 
 // System Info
 const systemInfo = ref({
   appVersion: 'Loading...',
   nodeVersion: 'Loading...',
-  platform: 'Loading...',
-  dataDir: 'Loading...'
+  platform: 'Loading...'
 })
 
 const handleLogout = async () => {
@@ -225,35 +223,85 @@ const handleLogout = async () => {
 }
 
 const updateCredentials = async () => {
+  // 当前密码是必填的
   if (!currentPassword.value) {
-    await modal.alert(t('settings.enterCurrentPassword'))
+    toast.error(t('settings.enterCurrentPassword'))
     return
   }
 
-  if (newPassword.value && newPassword.value !== confirmPassword.value) {
-    await modal.alert(t('settings.passwordsNotMatch'))
-    return
-  }
-
+  // 至少要修改用户名或密码中的一个
   if (!newUsername.value && !newPassword.value) {
-    await modal.alert(t('settings.enterNewCredentials'))
+    toast.error(t('settings.enterNewCredentials'))
     return
   }
 
-  console.log('Updating credentials:', {
-    currentPassword: currentPassword.value,
-    newUsername: newUsername.value || undefined,
-    newPassword: newPassword.value || undefined
-  })
+  // 如果要修改密码，验证密码确认
+  if (newPassword.value && newPassword.value !== confirmPassword.value) {
+    toast.error(t('settings.passwordsNotMatch'))
+    return
+  }
 
-  // TODO: Implement API call
-  await modal.alert(t('settings.credentialsUpdated'))
+  // 如果要修改密码，验证密码长度
+  if (newPassword.value && newPassword.value.length < 6) {
+    toast.error(t('settings.passwordTooShort'))
+    return
+  }
 
-  // Clear form
-  currentPassword.value = ''
-  newUsername.value = ''
-  newPassword.value = ''
-  confirmPassword.value = ''
+  // 如果要修改用户名，验证用户名长度
+  if (newUsername.value && newUsername.value.length < 3) {
+    toast.error(t('settings.usernameTooShort'))
+    return
+  }
+
+  try {
+    // 调用统一的凭据更新接口
+    const response = await updateCredentialsAPI(
+      currentPassword.value,
+      newUsername.value || null,
+      newPassword.value || null
+    )
+
+    // 根据更新的内容显示对应的成功提示
+    const updated = response.data.updated || []
+
+    let successMessage = ''
+    if (updated.includes('username') && updated.includes('password')) {
+      successMessage = 'credentialsUpdated'
+    } else if (updated.includes('username')) {
+      successMessage = 'usernameUpdated'
+    } else if (updated.includes('password')) {
+      successMessage = 'passwordUpdated'
+    }
+
+    // 清空表单
+    currentPassword.value = ''
+    newUsername.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+
+    // 立即退出登录并传递成功消息到登录页
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('is_authenticated')
+    window.location.href = `/login?message=${successMessage}`
+  } catch (error) {
+    console.error('Failed to update credentials:', error)
+
+    // 获取错误信息
+    const errorMsg = error.response?.data?.message || error.message
+    const statusCode = error.response?.status
+
+    // 如果是 401 错误（当前密码错误），显示特定提示
+    if (statusCode === 401) {
+      toast.error(t('settings.currentPasswordIncorrect'))
+      // 聚焦到当前密码输入框，方便用户重新输入
+      // 注意：不清空表单，保留用户已填写的新用户名和新密码
+    } else {
+      // 其他错误
+      toast.error(t('settings.updateFailed') + ': ' + errorMsg)
+    }
+
+    // 错误时不退出登录，让用户可以重新尝试
+  }
 }
 
 // Load GitHub accounts
@@ -276,6 +324,16 @@ const loadSystemInfo = async () => {
     systemInfo.value = info
   } catch (error) {
     console.error('Failed to load system info:', error)
+  }
+}
+
+// Load storage information
+const loadStorageInfo = async () => {
+  try {
+    const storage = await getStorageInfo()
+    storageData.value = storage
+  } catch (error) {
+    console.error('Failed to load storage info:', error)
   }
 }
 
@@ -337,6 +395,7 @@ const removeAccount = async (id) => {
 onMounted(async () => {
   await loadGithubAccounts()
   await loadSystemInfo()
+  await loadStorageInfo()
 
   // Check if coming from OAuth callback
   if (route.query.success === 'github_connected') {
@@ -351,20 +410,30 @@ onMounted(async () => {
 const clearCache = async () => {
   const confirmed = await modal.confirm(t('settings.clearCacheConfirm'))
   if (confirmed) {
-    console.log('Clearing build cache...')
-    storageData.value.cache = 0
-    storageData.value.total = storageData.value.projects + storageData.value.logs
-    await modal.alert(t('settings.cacheCleared'))
+    try {
+      const result = await clearCacheAPI()
+      toast.success(t('settings.cacheCleared'))
+      // Reload storage info to reflect changes
+      await loadStorageInfo()
+    } catch (error) {
+      console.error('Failed to clear cache:', error)
+      toast.error(t('settings.clearCacheFailed'))
+    }
   }
 }
 
 const clearLogs = async () => {
   const confirmed = await modal.confirm(t('settings.clearLogsConfirm'))
   if (confirmed) {
-    console.log('Clearing logs...')
-    storageData.value.logs = 0
-    storageData.value.total = storageData.value.projects + storageData.value.cache
-    await modal.alert(t('settings.logsCleared'))
+    try {
+      const result = await clearLogsAPI()
+      toast.success(t('settings.logsCleared'))
+      // Reload storage info to reflect changes
+      await loadStorageInfo()
+    } catch (error) {
+      console.error('Failed to clear logs:', error)
+      toast.error(t('settings.clearLogsFailed'))
+    }
   }
 }
 

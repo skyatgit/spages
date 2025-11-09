@@ -7,3 +7,28 @@ export const getSystemInfo = async () => {
   const response = await apiClient.get('/system/info')
   return response.data
 }
+
+/**
+ * 获取存储信息
+ */
+export const getStorageInfo = async () => {
+  const response = await apiClient.get('/system/storage')
+  return response.data
+}
+
+/**
+ * 清空构建缓存
+ */
+export const clearCache = async () => {
+  const response = await apiClient.post('/system/clear-cache')
+  return response.data
+}
+
+/**
+ * 清空日志
+ */
+export const clearLogs = async () => {
+  const response = await apiClient.post('/system/clear-logs')
+  return response.data
+}
+

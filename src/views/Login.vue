@@ -1,5 +1,7 @@
 <template>
   <div class="login-container">
+    <Toast />
+
     <div class="language-switcher-top">
       <div class="language-dropdown">
         <div class="language-selected" @click="toggleDropdown">
@@ -72,13 +74,17 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { setLanguage } from '@/locales'
+import { useToast } from '@/utils/toast'
+import Toast from '@/components/Toast.vue'
 
 const router = useRouter()
+const route = useRoute()
 const { t, locale } = useI18n()
+const toast = useToast()
 
 const username = ref('')
 const password = ref('')
@@ -141,6 +147,30 @@ const handleLogin = async () => {
     isLoading.value = false
   }
 }
+
+// 检查 URL 参数中的成功消息
+onMounted(() => {
+  const message = route.query.message
+  if (message) {
+    // 根据消息键显示对应的成功提示
+    const messageMap = {
+      'credentialsUpdated': 'settings.credentialsUpdated',
+      'usernameUpdated': 'settings.usernameUpdated',
+      'passwordUpdated': 'settings.passwordUpdated'
+    }
+
+    const translationKey = messageMap[message]
+    if (translationKey) {
+      // 延迟显示，确保页面已经渲染完成
+      setTimeout(() => {
+        toast.success(t(translationKey))
+      }, 100)
+
+      // 清除 URL 参数，避免刷新页面时重复显示
+      router.replace({ query: {} })
+    }
+  }
+})
 </script>
 
 <style scoped>

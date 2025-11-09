@@ -14,7 +14,8 @@ export default {
     error: 'Error',
     logout: 'Logout',
     refresh: 'Refresh',
-    tip: 'Tip'
+    tip: 'Tip',
+    copy: 'Copy'
   },
 
   nav: {
@@ -200,7 +201,6 @@ export default {
     currentPasswordRequired: 'Please enter your current password',
     passwordMismatch: 'New passwords do not match',
     credentialsRequired: 'Please enter new username or password',
-    credentialsUpdated: 'Credentials updated successfully!',
 
     githubSection: 'GitHub Accounts',
     githubDesc: 'Manage multiple GitHub accounts for accessing repositories',
@@ -242,6 +242,8 @@ export default {
     clearLogsConfirm: 'Are you sure you want to clear old logs?',
     cacheCleared: 'Build cache cleared!',
     logsCleared: 'Logs cleared!',
+    clearCacheFailed: 'Failed to clear cache',
+    clearLogsFailed: 'Failed to clear logs',
 
     systemSection: 'System Information',
     systemDesc: 'Platform and runtime information',
@@ -249,11 +251,22 @@ export default {
     nodeVersion: 'Node.js Version',
     platform: 'Platform',
     dataDirectory: 'Data Directory',
+    accessUrls: 'Access URLs',
+    urlCopied: 'URL copied to clipboard!',
+    copyFailed: 'Failed to copy',
 
     logoutConfirm: 'Are you sure you want to logout?',
     enterCurrentPassword: 'Please enter your current password',
+    currentPasswordIncorrect: 'Current password is incorrect, please try again',
     passwordsNotMatch: 'New passwords do not match',
     enterNewCredentials: 'Please enter new username or password',
+    passwordTooShort: 'New password must be at least 6 characters long',
+    usernameTooShort: 'New username must be at least 3 characters long',
+    usernameUpdated: 'Username updated successfully!',
+    passwordUpdated: 'Password updated successfully!',
+    credentialsUpdated: 'Username and password updated successfully!',
+    credentialsUpdatedRelogin: 'Credentials updated. Would you like to re-login?',
+    updateFailed: 'Update failed',
     githubConnected: 'GitHub account connected successfully!',
     githubAuthFailed: 'GitHub authentication failed, please try again',
     githubNotConfigured: 'GitHub App is not configured. Please create a GitHub App and configure environment variables',

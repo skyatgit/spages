@@ -14,7 +14,8 @@ export default {
     error: '操作失败',
     logout: '退出登录',
     refresh: '刷新',
-    tip: '提示'
+    tip: '提示',
+    copy: '复制'
   },
 
   nav: {
@@ -200,7 +201,6 @@ export default {
     currentPasswordRequired: '请输入当前密码',
     passwordMismatch: '两次输入的密码不一致',
     credentialsRequired: '请输入新用户名或密码',
-    credentialsUpdated: '凭据更新成功！',
 
     githubSection: 'GitHub 账号',
     githubDesc: '管理多个 GitHub 账号以访问仓库',
@@ -242,6 +242,8 @@ export default {
     clearLogsConfirm: '确定要清空旧日志吗？',
     cacheCleared: '构建缓存已清空！',
     logsCleared: '日志已清空！',
+    clearCacheFailed: '清空缓存失败',
+    clearLogsFailed: '清空日志失败',
 
     systemSection: '系统信息',
     systemDesc: '平台和运行时信息',
@@ -249,11 +251,22 @@ export default {
     nodeVersion: 'Node.js 版本',
     platform: '平台',
     dataDirectory: '数据目录',
+    accessUrls: '访问地址',
+    urlCopied: '地址已复制到剪贴板！',
+    copyFailed: '复制失败',
 
     logoutConfirm: '确定要退出登录吗？',
     enterCurrentPassword: '请输入当前密码',
+    currentPasswordIncorrect: '当前密码错误，请重新输入',
     passwordsNotMatch: '两次输入的密码不一致',
     enterNewCredentials: '请输入新用户名或密码',
+    passwordTooShort: '新密码至少需要6个字符',
+    usernameTooShort: '新用户名至少需要3个字符',
+    usernameUpdated: '用户名更新成功！',
+    passwordUpdated: '密码更新成功！',
+    credentialsUpdated: '用户名和密码更新成功！',
+    credentialsUpdatedRelogin: '凭据已更新，是否重新登录？',
+    updateFailed: '更新失败',
     githubConnected: 'GitHub 账号连接成功！',
     githubAuthFailed: 'GitHub 认证失败，请重试',
     githubNotConfigured: 'GitHub App 未配置。请先创建 GitHub App 并配置环境变量',
