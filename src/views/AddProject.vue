@@ -61,10 +61,9 @@
                 <h3>{{ repo.name }}</h3>
                 <p class="repo-description">{{ repo.description || $t('addProject.noDescription') }}</p>
                 <div class="repo-meta">
-                  <span class="meta-item">⭐ {{ repo.stars }}</span>
-                  <span class="meta-item">🔀 {{ repo.forks }}</span>
-                  <span class="meta-item">{{ repo.language }}</span>
-                  <span class="meta-item">{{ repo.visibility }}</span>
+                  <span class="meta-item">{{ repo.fullName }}</span>
+                  <span class="meta-item">{{ repo.private ? '🔒 Private' : '🌐 Public' }}</span>
+                  <span v-if="repo.defaultBranch" class="meta-item">📌 {{ repo.defaultBranch }}</span>
                 </div>
               </div>
               <div v-if="selectedRepo?.id === repo.id" class="check-icon">✓</div>
@@ -133,25 +132,31 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import { useModal } from '@/utils/modal'
+import {
+  getGithubAccounts,
+  getGithubRepositories,
+  getGithubBranches
+} from '@/api/github'
+import { checkProjectName, checkPort, createProject, deployProject } from '@/api/projects'
 
 const router = useRouter()
 const { t } = useI18n()
 const modal = useModal()
 
-const isGithubConnected = ref(true) // Mock: set to false to see connect screen
+const isGithubConnected = ref(false)
 const loading = ref(false)
 const searchQuery = ref('')
-const selectedAccount = ref('1') // Selected GitHub account ID
+const selectedAccount = ref('') // Selected GitHub account ID
 const selectedRepo = ref(null)
 const projectName = ref('')
-const branch = ref('main')
+const branch = ref('')
 const port = ref(3001)
-const branches = ref(['main', 'master', 'develop'])
+const branches = ref([])
 const loadingBranches = ref(false)
 const portError = ref('')
 const portChecking = ref(false)
@@ -162,10 +167,31 @@ const projectNameAvailable = ref(false)
 let projectNameCheckTimer = null
 let portCheckTimer = null
 
-// 已使用的端口列表（模拟）
-const usedPorts = ref([3001, 3002, 3003])
-// 已存在的项目名称列表（模拟）
-const existingProjectNames = ref(['my-blog', 'portfolio-site', 'docs-website'])
+const githubAccounts = ref([])
+const repositories = ref([])
+
+// 页面加载时检查是否已连接 GitHub
+onMounted(async () => {
+  await loadGithubAccounts()
+})
+
+// 加载 GitHub 账号列表
+const loadGithubAccounts = async () => {
+  try {
+    const accounts = await getGithubAccounts()
+    githubAccounts.value = accounts
+    isGithubConnected.value = accounts.length > 0
+
+    // 如果有账号，自动选择第一个
+    if (accounts.length > 0) {
+      selectedAccount.value = accounts[0].id
+      await loadRepositories()
+    }
+  } catch (error) {
+    console.error('Failed to load GitHub accounts:', error)
+    isGithubConnected.value = false
+  }
+}
 
 // 监听项目名称变化，实时检查
 watch(projectName, (newName) => {
@@ -184,7 +210,7 @@ watch(projectName, (newName) => {
 
   // 防抖：500ms 后执行检查
   projectNameCheckTimer = setTimeout(() => {
-    checkProjectName()
+    checkProjectNameAvailability()
   }, 500)
 })
 
@@ -205,67 +231,9 @@ watch(port, (newPort) => {
 
   // 防抖：500ms 后执行检查
   portCheckTimer = setTimeout(() => {
-    checkPort()
+    checkPortAvailability()
   }, 500)
 })
-
-// Mock GitHub accounts
-const githubAccounts = ref([
-  {
-    id: '1',
-    username: 'john-doe',
-    email: 'john@example.com'
-  },
-  {
-    id: '2',
-    username: 'company-org',
-    email: 'dev@company.com'
-  }
-])
-
-// Mock repositories data
-const repositories = ref([
-  {
-    id: 1,
-    name: 'my-blog',
-    full_name: 'username/my-blog',
-    description: 'Personal blog built with Vue and Vite',
-    stars: 42,
-    forks: 5,
-    language: 'Vue',
-    visibility: 'public'
-  },
-  {
-    id: 2,
-    name: 'portfolio-website',
-    full_name: 'username/portfolio-website',
-    description: 'My personal portfolio website',
-    stars: 15,
-    forks: 2,
-    language: 'JavaScript',
-    visibility: 'public'
-  },
-  {
-    id: 3,
-    name: 'react-dashboard',
-    full_name: 'username/react-dashboard',
-    description: 'Admin dashboard template with React',
-    stars: 128,
-    forks: 34,
-    language: 'React',
-    visibility: 'public'
-  },
-  {
-    id: 4,
-    name: 'docs-site',
-    full_name: 'username/docs-site',
-    description: 'Documentation website',
-    stars: 8,
-    forks: 1,
-    language: 'TypeScript',
-    visibility: 'private'
-  }
-])
 
 const filteredRepos = computed(() => {
   if (!searchQuery.value) return repositories.value
@@ -276,18 +244,23 @@ const filteredRepos = computed(() => {
 })
 
 const connectGithub = () => {
-  console.log('Connecting to GitHub...')
-  // Will implement OAuth flow later
-  isGithubConnected.value = true
+  // 跳转到设置页面连接 GitHub
+  router.push('/settings')
 }
 
-const loadRepositories = () => {
-  console.log('Loading repositories for account:', selectedAccount.value)
+const loadRepositories = async () => {
+  if (!selectedAccount.value) return
+
   loading.value = true
-  // Simulate API call
-  setTimeout(() => {
+  try {
+    const repos = await getGithubRepositories(selectedAccount.value)
+    repositories.value = repos
+  } catch (error) {
+    console.error('Failed to load repositories:', error)
+    await modal.alert(t('addProject.loadReposFailed'))
+  } finally {
     loading.value = false
-  }, 500)
+  }
 }
 
 const selectRepo = (repo) => {
@@ -295,42 +268,34 @@ const selectRepo = (repo) => {
   projectName.value = repo.name
   // 加载仓库的分支列表
   loadBranches()
-  // 自动分配下一个可用端口
-  assignNextAvailablePort()
-  // 检查项目名称
-  checkProjectName()
+  // 自动检查端口
+  checkPortAvailability()
 }
 
 const loadBranches = async () => {
-  if (!selectedRepo.value) return
+  if (!selectedRepo.value || !selectedAccount.value) return
 
   loadingBranches.value = true
   try {
-    // TODO: 调用后端 API 获取实际的分支列表
-    // const response = await fetch(`/api/repos/${selectedRepo.value.id}/branches`)
-    // branches.value = await response.json()
+    // 从 fullName 中提取 owner 和 repo
+    const [owner, repo] = selectedRepo.value.fullName.split('/')
+    const branchList = await getGithubBranches(selectedAccount.value, owner, repo)
+    branches.value = branchList
 
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 500))
-    branches.value = ['main', 'master', 'develop', 'staging', 'production']
+    // 自动选择默认分支
+    if (branchList.length > 0) {
+      branch.value = selectedRepo.value.defaultBranch || branchList[0]
+    }
   } catch (error) {
     console.error('Failed to load branches:', error)
-    branches.value = ['main', 'master', 'develop']
+    await modal.alert(t('addProject.loadBranchesFailed'))
+    branches.value = []
   } finally {
     loadingBranches.value = false
   }
 }
 
-const assignNextAvailablePort = () => {
-  let nextPort = 3001
-  while (usedPorts.value.includes(nextPort)) {
-    nextPort++
-  }
-  port.value = nextPort
-  checkPort()
-}
-
-const checkProjectName = async () => {
+const checkProjectNameAvailability = async () => {
   projectNameError.value = ''
   projectNameAvailable.value = false
 
@@ -348,27 +313,24 @@ const checkProjectName = async () => {
   projectNameChecking.value = true
 
   try {
-    // TODO: 调用后端 API 检查项目名称是否已存在
-    // const response = await fetch(`/api/check-project-name/${projectName.value}`)
-    // const data = await response.json()
+    const result = await checkProjectName(projectName.value)
+    console.log('Project name check result:', result)
 
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 300))
-
-    if (existingProjectNames.value.includes(projectName.value)) {
-      projectNameError.value = t('addProject.projectNameExists')
-    } else {
+    if (result && result.available === true) {
       projectNameAvailable.value = true
+    } else {
+      projectNameError.value = t('addProject.projectNameExists')
     }
   } catch (error) {
     console.error('Failed to check project name:', error)
+    console.error('Error details:', error.response?.data || error.message)
     projectNameError.value = t('addProject.projectNameCheckFailed')
   } finally {
     projectNameChecking.value = false
   }
 }
 
-const checkPort = async () => {
+const checkPortAvailability = async () => {
   portError.value = ''
   portAvailable.value = false
 
@@ -380,20 +342,17 @@ const checkPort = async () => {
   portChecking.value = true
 
   try {
-    // TODO: 调用后端 API 检查端口是否被占用
-    // const response = await fetch(`/api/check-port/${port.value}`)
-    // const data = await response.json()
+    const result = await checkPort(port.value)
+    console.log('Port check result:', result)
 
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 300))
-
-    if (usedPorts.value.includes(port.value)) {
-      portError.value = t('addProject.portInUse')
-    } else {
+    if (result && result.available === true) {
       portAvailable.value = true
+    } else {
+      portError.value = t('addProject.portInUse')
     }
   } catch (error) {
     console.error('Failed to check port:', error)
+    console.error('Error details:', error.response?.data || error.message)
     portError.value = t('addProject.portCheckFailed')
   } finally {
     portChecking.value = false
@@ -403,8 +362,9 @@ const checkPort = async () => {
 const cancel = () => {
   selectedRepo.value = null
   projectName.value = ''
-  branch.value = 'main'
+  branch.value = ''
   port.value = 3001
+  branches.value = []
   portError.value = ''
   portAvailable.value = false
   projectNameError.value = ''
@@ -413,6 +373,11 @@ const cancel = () => {
 
 const addProject = async () => {
   // 验证表单
+  if (!selectedRepo.value) {
+    await modal.alert(t('addProject.selectRepoRequired'))
+    return
+  }
+
   if (!projectName.value.trim()) {
     await modal.alert(t('addProject.projectNameRequired'))
     return
@@ -433,18 +398,30 @@ const addProject = async () => {
     return
   }
 
-  console.log('Adding project:', {
-    repo: selectedRepo.value,
-    name: projectName.value,
-    branch: branch.value,
-    port: port.value
-  })
+  try {
+    const [owner, repo] = selectedRepo.value.fullName.split('/')
 
-  // TODO: 调用后端 API 创建项目
-  // Will implement actual project creation later
+    const project = await createProject({
+      name: projectName.value,
+      accountId: selectedAccount.value,
+      repository: selectedRepo.value.fullName,
+      owner,
+      repo,
+      branch: branch.value,
+      port: port.value
+    })
 
-  await modal.alert(t('addProject.projectAdded'))
-  router.push('/')
+    // 自动触发部署
+    if (project && project.id) {
+      await deployProject(project.id)
+    }
+
+    await modal.alert(t('addProject.projectAddedAndDeploying'))
+    router.push('/')
+  } catch (error) {
+    console.error('Failed to create project:', error)
+    await modal.alert(t('addProject.createProjectFailed'))
+  }
 }
 </script>
 

@@ -62,8 +62,17 @@ export default {
       deploying: 'Deploying',
       running: 'Running',
       failed: 'Failed',
-      stopped: 'Stopped'
-    }
+      stopped: 'Stopped',
+      pending: 'Pending'
+    },
+    loadProjectsFailed: 'Failed to load projects',
+    deploymentStarted: 'Deployment started',
+    deploymentFailed: 'Deployment failed',
+    projectUpdated: 'Project configuration updated!',
+    projectUpdateFailed: 'Failed to update project',
+    deleteConfirm: 'Are you sure you want to delete this project? This will stop the running service.',
+    projectDeleted: 'Project deleted',
+    deleteFailed: 'Failed to delete project'
   },
 
   addProject: {
@@ -100,7 +109,12 @@ export default {
     projectNameCheckFailed: 'Failed to check project name',
     checkingProjectName: 'Checking project name...',
     projectNameAvailable: 'Project name is available',
-    projectNameNotAvailable: 'Please use an available project name'
+    projectNameNotAvailable: 'Please use an available project name',
+    selectRepoRequired: 'Please select a repository',
+    loadReposFailed: 'Failed to load repositories',
+    loadBranchesFailed: 'Failed to load branches',
+    createProjectFailed: 'Failed to create project',
+    projectAddedAndDeploying: 'Project created, deploying...'
   },
 
   projectDetail: {
@@ -129,7 +143,12 @@ export default {
     envVarsDesc: 'Configure environment variables for your project build',
     addVariable: 'Add Variable',
     keyPlaceholder: 'KEY',
-    valuePlaceholder: 'value'
+    valuePlaceholder: 'value',
+    loadFailed: 'Failed to load project',
+    deploymentStarted: 'Deployment started',
+    deploymentFailed: 'Deployment failed',
+    projectDeleted: 'Project deleted',
+    deleteFailed: 'Failed to delete project'
   },
 
   settings: {

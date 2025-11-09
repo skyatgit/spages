@@ -25,8 +25,14 @@
     </div>
 
     <div class="card-footer">
+      <button class="btn btn-small btn-delete" @click.stop="$emit('delete', project.id)" title="删除项目">
+        🗑️
+      </button>
       <button class="btn btn-small btn-edit" @click.stop="$emit('edit', project)" title="编辑配置">
         ⚙️
+      </button>
+      <button class="btn btn-small btn-logs" @click.stop="handleClick" title="查看详情和日志">
+        📋
       </button>
       <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-small" @click.stop>
         {{ $t('dashboard.visitSite') }}
@@ -44,17 +50,17 @@ import StatusBadge from './StatusBadge.vue'
 
 const { t: $t } = useI18n()
 
-defineProps({
+const props = defineProps({
   project: {
     type: Object,
     required: true
   }
 })
 
-defineEmits(['click', 'deploy', 'edit'])
+const emit = defineEmits(['click', 'deploy', 'edit', 'delete'])
 
 const handleClick = () => {
-  // Router navigation will be handled by parent
+  emit('click', props.project.id)
 }
 
 const formatDate = (date) => {
@@ -164,6 +170,30 @@ const formatDate = (date) => {
 
 .btn-edit:hover {
   background: #e67e22;
+  transform: scale(1.1);
+}
+
+.btn-delete {
+  background: #e74c3c;
+  color: white;
+  font-size: 16px;
+  padding: 6px 10px;
+}
+
+.btn-delete:hover {
+  background: #c0392b;
+  transform: scale(1.1);
+}
+
+.btn-logs {
+  background: #3498db;
+  color: white;
+  font-size: 16px;
+  padding: 6px 10px;
+}
+
+.btn-logs:hover {
+  background: #2980b9;
   transform: scale(1.1);
 }
 </style>

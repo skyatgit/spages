@@ -26,7 +26,8 @@
     "tar": "^7.4.3",
     "sirv": "^2.0.4",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "adm-zip": "^0.5.16"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",

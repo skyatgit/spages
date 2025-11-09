@@ -28,6 +28,7 @@
           @click="goToProject(project.id)"
           @deploy="handleDeploy(project.id)"
           @edit="handleEdit"
+          @delete="handleDelete"
         />
       </div>
     </div>
@@ -41,63 +42,57 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
 import EditProjectModal from '@/components/EditProjectModal.vue'
 import { useModal } from '@/utils/modal'
+import { projectsAPI, deployProject } from '@/api/projects'
 
 const router = useRouter()
 const modal = useModal()
+const { t } = useI18n()
 
 const showEditModal = ref(false)
 const editingProject = ref(null)
+const projects = ref([])
+const loading = ref(true)
 
-// Mock data for demonstration
-const projects = ref([
-  {
-    id: '1',
-    name: 'my-blog',
-    repository: 'username/my-blog',
-    branch: 'main',
-    port: 3001,
-    status: 'running',
-    url: 'http://localhost:3001',
-    lastDeploy: new Date().toISOString()
-  },
-  {
-    id: '2',
-    name: 'portfolio-site',
-    repository: 'username/portfolio',
-    branch: 'main',
-    port: 3002,
-    status: 'idle',
-    url: 'http://localhost:3002',
-    lastDeploy: new Date(Date.now() - 86400000).toISOString()
-  },
-  {
-    id: '3',
-    name: 'docs-website',
-    repository: 'username/docs',
-    branch: 'develop',
-    port: 3003,
-    status: 'failed',
-    url: null,
-    lastDeploy: new Date(Date.now() - 172800000).toISOString()
+// 页面加载时获取项目列表
+onMounted(async () => {
+  await loadProjects()
+})
+
+// 加载项目列表
+const loadProjects = async () => {
+  loading.value = true
+  try {
+    const projectList = await projectsAPI.getProjects()
+    projects.value = projectList
+  } catch (error) {
+    console.error('Failed to load projects:', error)
+    await modal.alert(t('dashboard.loadProjectsFailed'))
+  } finally {
+    loading.value = false
   }
-])
-
-// For empty state demo, uncomment this:
-// const projects = ref([])
+}
 
 const goToProject = (id) => {
   router.push(`/project/${id}`)
 }
 
-const handleDeploy = (id) => {
-  console.log('Deploy project:', id)
-  // Will implement actual deployment later
+const handleDeploy = async (id) => {
+  try {
+    await deployProject(id)
+    await modal.alert(t('dashboard.deploymentStarted'))
+    // 刷新项目列表以显示最新状态
+    await loadProjects()
+  } catch (error) {
+    console.error('Failed to deploy project:', error)
+    await modal.alert(t('dashboard.deploymentFailed'))
+  }
 }
 
 const handleEdit = (project) => {
@@ -106,16 +101,36 @@ const handleEdit = (project) => {
 }
 
 const handleSaveProject = async (updatedProject) => {
-  console.log('Saving project:', updatedProject)
+  try {
+    // 发送到后端保存
+    await projectsAPI.updateProject(updatedProject.id, updatedProject)
 
-  // 更新本地项目列表
-  const index = projects.value.findIndex(p => p.id === updatedProject.id)
-  if (index !== -1) {
-    projects.value[index] = { ...projects.value[index], ...updatedProject }
+    // 更新本地项目列表
+    const index = projects.value.findIndex(p => p.id === updatedProject.id)
+    if (index !== -1) {
+      projects.value[index] = { ...projects.value[index], ...updatedProject }
+    }
+
+    await modal.alert(t('dashboard.projectUpdated'))
+  } catch (error) {
+    console.error('Failed to update project:', error)
+    await modal.alert(t('dashboard.projectUpdateFailed'))
   }
+}
 
-  // TODO: 发送到后端保存
-  await modal.alert('项目配置已更新！')
+const handleDelete = async (projectId) => {
+  const confirmed = await modal.confirm(t('dashboard.deleteConfirm'))
+  if (!confirmed) return
+
+  try {
+    await projectsAPI.deleteProject(projectId)
+    await modal.alert(t('dashboard.projectDeleted'))
+    // 刷新项目列表
+    await loadProjects()
+  } catch (error) {
+    console.error('Failed to delete project:', error)
+    await modal.alert(t('dashboard.deleteFailed'))
+  }
 }
 </script>
 

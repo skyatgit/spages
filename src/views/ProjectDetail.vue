@@ -134,13 +134,14 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LogViewer from '@/components/LogViewer.vue'
 import { useModal } from '@/utils/modal'
+import { projectsAPI, deployProject as apiDeployProject, getDeploymentHistory, getEnvVars, updateEnvVars, getProjectLogs } from '@/api/projects'
 
 const { t } = useI18n()
 const modal = useModal()
@@ -150,83 +151,140 @@ const router = useRouter()
 
 const projectId = route.params.id
 
-// Mock project data
 const project = ref({
   id: projectId,
-  name: 'my-blog',
-  repository: 'username/my-blog',
-  branch: 'main',
-  port: 3001,
-  status: 'running',
-  url: 'http://localhost:3001',
-  lastDeploy: new Date().toISOString(),
-  buildCommand: 'npm run build',
+  name: '',
+  repository: '',
+  branch: '',
+  port: null,
+  status: 'pending',
+  url: null,
+  lastDeploy: null,
+  buildCommand: '',
   outputDir: 'dist'
 })
 
 const isDeploying = ref(false)
+const loading = ref(true)
 
-const deploymentLogs = ref([
-  { type: 'info', timestamp: Date.now(), message: 'Starting deployment...' },
-  { type: 'info', timestamp: Date.now(), message: 'Cloning repository...' },
-  { type: 'success', timestamp: Date.now(), message: 'Repository cloned successfully' },
-  { type: 'info', timestamp: Date.now(), message: 'Installing dependencies...' },
-  { type: 'success', timestamp: Date.now(), message: 'Dependencies installed' },
-  { type: 'info', timestamp: Date.now(), message: 'Running build command...' },
-  { type: 'success', timestamp: Date.now(), message: 'Build completed successfully' },
-  { type: 'success', timestamp: Date.now(), message: 'Deployment successful!' }
-])
-
-const deploymentHistory = ref([
-  {
-    id: '1',
-    status: 'running',
-    timestamp: new Date().toISOString(),
-    commit: 'abc1234'
-  },
-  {
-    id: '2',
-    status: 'running',
-    timestamp: new Date(Date.now() - 86400000).toISOString(),
-    commit: 'def5678'
-  },
-  {
-    id: '3',
-    status: 'failed',
-    timestamp: new Date(Date.now() - 172800000).toISOString(),
-    commit: 'ghi9012'
-  }
-])
-
-const envVars = ref({
-  1: { key: 'API_URL', value: 'https://api.example.com', hidden: false },
-  2: { key: 'SECRET_KEY', value: 'secret123', hidden: true }
+// 页面加载时获取项目详情
+onMounted(async () => {
+  await loadProject()
+  await loadLogs()
+  await loadDeploymentHistory()
+  await loadEnvVars()
+  // 自动刷新状态每5秒
+  setInterval(loadProject, 5000)
+  // 自动刷新日志每3秒
+  setInterval(loadLogs, 3000)
+  // 刷新部署历史每10秒
+  setInterval(loadDeploymentHistory, 10000)
 })
+
+// 加载项目详情
+const loadProject = async () => {
+  try {
+    console.log('[ProjectDetail] Loading project with ID:', projectId)
+    const projectData = await projectsAPI.getProject(projectId)
+    console.log('[ProjectDetail] Project data received:', projectData)
+    project.value = projectData
+  } catch (error) {
+    console.error('[ProjectDetail] Failed to load project:', error)
+    console.error('[ProjectDetail] Error details:', error.response?.data || error.message)
+    if (loading.value) {
+      await modal.alert(t('projectDetail.loadFailed'))
+      router.push('/')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+const deploymentLogs = ref([])
+
+// 加载部署日志
+const loadLogs = async () => {
+  try {
+    const response = await getProjectLogs(projectId)
+    if (response && response.logs) {
+      deploymentLogs.value = response.logs
+    }
+  } catch (error) {
+    console.error('Failed to load logs:', error)
+  }
+}
+
+const deploymentHistory = ref([])
+
+// 加载部署历史
+const loadDeploymentHistory = async () => {
+  try {
+    const response = await getDeploymentHistory(projectId)
+    if (response && response.deployments) {
+      deploymentHistory.value = response.deployments
+    }
+  } catch (error) {
+    console.error('Failed to load deployment history:', error)
+  }
+}
+
+const envVars = ref({})
+
+// 加载环境变量
+const loadEnvVars = async () => {
+  try {
+    const response = await getEnvVars(projectId)
+    if (response && response.env) {
+      // Convert object to array format for UI
+      const envArray = {}
+      let counter = 1
+      for (const [key, value] of Object.entries(response.env)) {
+        envArray[counter] = { key, value, hidden: true }
+        counter++
+      }
+      envVars.value = envArray
+    }
+  } catch (error) {
+    console.error('Failed to load env vars:', error)
+  }
+}
 
 const formatDate = (date) => {
   if (!date) return t('dashboard.never')
   return new Date(date).toLocaleString()
 }
 
-const deploy = () => {
-  isDeploying.value = true
-  console.log('Deploying project:', projectId)
-  // Simulate deployment
-  setTimeout(() => {
-    isDeploying.value = false
+const deploy = async () => {
+  try {
+    isDeploying.value = true
+    await apiDeployProject(projectId)
     deploymentLogs.value.push({
       type: 'success',
       timestamp: Date.now(),
-      message: 'New deployment completed!'
+      message: 'Deployment started!'
     })
-  }, 3000)
+    await modal.alert(t('projectDetail.deploymentStarted'))
+    // 刷新项目状态
+    await loadProject()
+  } catch (error) {
+    console.error('Deployment failed:', error)
+    await modal.alert(t('projectDetail.deploymentFailed'))
+  } finally {
+    isDeploying.value = false
+  }
 }
 
 const deleteProject = async () => {
   const confirmed = await modal.confirm(t('projectDetail.deleteConfirm'))
   if (confirmed) {
-    console.log('Deleting project:', projectId)
-    router.push('/')
+    try {
+      await projectsAPI.deleteProject(projectId)
+      await modal.alert(t('projectDetail.projectDeleted'))
+      router.push('/')
+    } catch (error) {
+      console.error('Failed to delete project:', error)
+      await modal.alert(t('projectDetail.deleteFailed'))
+    }
   }
 }
 
@@ -248,8 +306,15 @@ const downloadLogs = () => {
   URL.revokeObjectURL(url)
 }
 
-const viewLogs = (deploymentId) => {
-  console.log('Viewing logs for deployment:', deploymentId)
+const viewLogs = async (deploymentId) => {
+  try {
+    const response = await getProjectLogs(projectId, deploymentId)
+    if (response && response.logs) {
+      deploymentLogs.value = response.logs
+    }
+  } catch (error) {
+    console.error('Failed to load deployment logs:', error)
+  }
 }
 
 let envCounter = Object.keys(envVars.value).length
@@ -268,8 +333,21 @@ const toggleEnvVisibility = (key) => {
 }
 
 const saveEnvVars = async () => {
-  console.log('Saving environment variables:', envVars.value)
-  await modal.alert(t('common.success'))
+  try {
+    // Convert array format to object
+    const envObject = {}
+    for (const item of Object.values(envVars.value)) {
+      if (item.key && item.value) {
+        envObject[item.key] = item.value
+      }
+    }
+
+    await updateEnvVars(projectId, envObject)
+    await modal.alert(t('common.success'))
+  } catch (error) {
+    console.error('Failed to save env vars:', error)
+    await modal.alert('Failed to save environment variables')
+  }
 }
 </script>
 

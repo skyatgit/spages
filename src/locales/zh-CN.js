@@ -62,8 +62,17 @@ export default {
       deploying: '部署中',
       running: '运行中',
       failed: '失败',
-      stopped: '已停止'
-    }
+      stopped: '已停止',
+      pending: '等待中'
+    },
+    loadProjectsFailed: '加载项目列表失败',
+    deploymentStarted: '部署已开始',
+    deploymentFailed: '部署失败',
+    projectUpdated: '项目配置已更新！',
+    projectUpdateFailed: '更新项目失败',
+    deleteConfirm: '确定要删除此项目吗？这将停止运行中的服务。',
+    projectDeleted: '项目已删除',
+    deleteFailed: '删除项目失败'
   },
 
   addProject: {
@@ -100,7 +109,12 @@ export default {
     projectNameCheckFailed: '项目名称检查失败',
     checkingProjectName: '检查项目名称...',
     projectNameAvailable: '项目名称可用',
-    projectNameNotAvailable: '请使用一个可用的项目名称'
+    projectNameNotAvailable: '请使用一个可用的项目名称',
+    selectRepoRequired: '请选择一个仓库',
+    loadReposFailed: '加载仓库失败',
+    loadBranchesFailed: '加载分支失败',
+    createProjectFailed: '创建项目失败',
+    projectAddedAndDeploying: '项目已创建，正在部署中...'
   },
 
   projectDetail: {
@@ -129,7 +143,12 @@ export default {
     envVarsDesc: '为项目构建配置环境变量',
     addVariable: '添加变量',
     keyPlaceholder: 'KEY',
-    valuePlaceholder: 'value'
+    valuePlaceholder: 'value',
+    loadFailed: '加载项目失败',
+    deploymentStarted: '部署已开始',
+    deploymentFailed: '部署失败',
+    projectDeleted: '项目已删除',
+    deleteFailed: '删除项目失败'
   },
 
   settings: {

@@ -1,10 +1,18 @@
 import express from 'express'
-import { projectsConfig } from '../utils/config.js'
 import { authMiddleware } from '../utils/auth.js'
-import { deployProjectV2, stopServerV2, getDeploymentLogs } from '../services/deployment-v2.js'
-import net from 'net'
-import fs from 'fs'
-import path from 'path'
+import {
+  deployProjectV3,
+  stopServerV3,
+  getDeploymentLogs,
+  getDeploymentHistory
+} from '../services/deployment-v3.js'
+import {
+  ProjectPaths,
+  ProjectConfig,
+  DeploymentHistory,
+  EnvironmentVars,
+  projectIndex
+} from '../services/project-manager.js'
 
 const router = express.Router()
 
@@ -14,15 +22,10 @@ router.get('/check-name/:name', authMiddleware, (req, res) => {
     const { name } = req.params
     console.log(`Checking project name: "${name}"`)
 
-    const projects = projectsConfig.read()
-    console.log(`Existing projects:`, Object.keys(projects))
-    console.log(`Existing project names:`, Object.values(projects).map(p => p.name))
+    const allProjects = projectIndex.getAll()
+    const exists = Object.values(allProjects).some(p => p.name === name)
 
-    // Check if name already exists
-    const exists = Object.values(projects).some(p => p.name === name)
     console.log(`Name "${name}" exists:`, exists)
-    console.log(`Returning available:`, !exists)
-
     res.json({ available: !exists })
   } catch (error) {
     console.error('Error checking project name:', error)
@@ -34,7 +37,6 @@ router.get('/check-name/:name', authMiddleware, (req, res) => {
 router.get('/check-port/:port', authMiddleware, (req, res) => {
   try {
     const port = parseInt(req.params.port)
-
     console.log(`Checking port ${port}`)
 
     if (port < 1024 || port > 65535) {
@@ -42,10 +44,8 @@ router.get('/check-port/:port', authMiddleware, (req, res) => {
       return res.json({ available: false, error: 'Invalid port range' })
     }
 
-    const projects = projectsConfig.read()
-
-    // Check if port is used by any existing project
-    const portInUse = Object.values(projects).some(p => p.port === port)
+    const allProjects = projectIndex.getAll()
+    const portInUse = Object.values(allProjects).some(p => p.port === port)
 
     if (portInUse) {
       console.log(`Port ${port} in use by project`)
@@ -53,8 +53,6 @@ router.get('/check-port/:port', authMiddleware, (req, res) => {
     }
 
     console.log(`Port ${port} available`)
-    // Simplified: Only check project config, not system ports
-    // System port check can be unreliable on some platforms
     res.json({ available: true })
   } catch (error) {
     console.error('Error checking port:', error)
@@ -62,11 +60,15 @@ router.get('/check-port/:port', authMiddleware, (req, res) => {
   }
 })
 
-// Get all projects
+// Get all projects (from index)
 router.get('/', authMiddleware, (req, res) => {
   try {
-    const projects = projectsConfig.read()
-    const projectList = Object.values(projects)
+    const projects = projectIndex.getAll()
+    // Add ID to each project object
+    const projectList = Object.entries(projects).map(([id, project]) => ({
+      id,
+      ...project
+    }))
     res.json(projectList)
   } catch (error) {
     console.error('Error fetching projects:', error)
@@ -74,12 +76,12 @@ router.get('/', authMiddleware, (req, res) => {
   }
 })
 
-// Get single project
+// Get single project (full details)
 router.get('/:id', authMiddleware, (req, res) => {
   try {
     const { id } = req.params
-    const projects = projectsConfig.read()
-    const project = projects[id]
+    const projectConfig = new ProjectConfig(id)
+    const project = projectConfig.read()
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' })
@@ -95,23 +97,23 @@ router.get('/:id', authMiddleware, (req, res) => {
 // Create new project
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { name, accountId, repository, owner, repo, branch, port } = req.body
+    const { name, accountId, repository, owner, repo, branch, port, buildCommand, outputDir } = req.body
 
     // Validate required fields
     if (!name || !accountId || !repository || !owner || !repo || !branch || !port) {
       return res.status(400).json({ error: 'Missing required fields' })
     }
 
-    const projects = projectsConfig.read()
+    const allProjects = projectIndex.getAll()
 
     // Check if name already exists
-    const nameExists = Object.values(projects).some(p => p.name === name)
+    const nameExists = Object.values(allProjects).some(p => p.name === name)
     if (nameExists) {
       return res.status(400).json({ error: 'Project name already exists' })
     }
 
     // Check if port is already in use
-    const portInUse = Object.values(projects).some(p => p.port === port)
+    const portInUse = Object.values(allProjects).some(p => p.port === port)
     if (portInUse) {
       return res.status(400).json({ error: 'Port already in use' })
     }
@@ -119,8 +121,13 @@ router.post('/', authMiddleware, async (req, res) => {
     // Create project ID
     const projectId = `proj_${Date.now()}`
 
-    // Create project object
-    const project = {
+    // Initialize project directory structure
+    const paths = new ProjectPaths(name)
+    paths.init()
+
+    // Create project config
+    const projectConfig = new ProjectConfig(name)
+    const config = {
       id: projectId,
       name,
       accountId,
@@ -128,24 +135,33 @@ router.post('/', authMiddleware, async (req, res) => {
       owner,
       repo,
       branch,
-      port,
-      status: 'pending', // pending, building, running, stopped, failed
+      port: parseInt(port),
+      buildCommand: buildCommand || 'npm run build',
+      outputDir: outputDir || 'dist',
+      status: 'pending',
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      lastDeploy: null,
+      url: null,
+      nodeVersion: null
     }
 
-    // Save project
-    projects[projectId] = project
-    projectsConfig.write(projects)
+    projectConfig.write(config)
 
-    // TODO: Trigger initial deployment
-    // This is where you would:
-    // 1. Clone the repository
-    // 2. Install dependencies
-    // 3. Build the project
-    // 4. Start the server
+    // Add to index
+    projectIndex.update(projectId, {
+      name,
+      path: `projects/${name}`,
+      port: parseInt(port),
+      status: 'pending',
+      repository,
+      branch,
+      lastDeploy: null,
+      url: null,
+      updatedAt: new Date().toISOString()
+    })
 
-    res.json(project)
+    res.json({ success: true, project: config })
   } catch (error) {
     console.error('Error creating project:', error)
     res.status(500).json({ error: 'Failed to create project' })
@@ -158,25 +174,27 @@ router.put('/:id', authMiddleware, (req, res) => {
     const { id } = req.params
     const updates = req.body
 
-    const projects = projectsConfig.read()
-    const project = projects[id]
+    const projectConfig = new ProjectConfig(id)
+    const project = projectConfig.read()
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    // Update project
-    projects[id] = {
-      ...project,
-      ...updates,
-      id, // Preserve ID
-      createdAt: project.createdAt, // Preserve creation time
-      updatedAt: new Date().toISOString()
-    }
+    // Update config
+    projectConfig.update(updates)
 
-    projectsConfig.write(projects)
+    // Update index
+    projectIndex.update(id, {
+      name: updates.name || project.name,
+      port: updates.port || project.port,
+      status: updates.status || project.status,
+      repository: updates.repository || project.repository,
+      branch: updates.branch || project.branch,
+      url: updates.url || project.url
+    })
 
-    res.json(projects[id])
+    res.json({ success: true })
   } catch (error) {
     console.error('Error updating project:', error)
     res.status(500).json({ error: 'Failed to update project' })
@@ -187,27 +205,22 @@ router.put('/:id', authMiddleware, (req, res) => {
 router.delete('/:id', authMiddleware, (req, res) => {
   try {
     const { id } = req.params
-    const projects = projectsConfig.read()
+    const projectConfig = new ProjectConfig(id)
+    const project = projectConfig.read()
 
-    if (!projects[id]) {
+    if (!project) {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    const project = projects[id]
-
     // Stop the running project before deleting
-    stopServerV2(id)
+    stopServerV3(id)
 
-    // Delete project files from disk
-    const projectPath = path.join(process.cwd(), 'projects', project.name)
-    if (fs.existsSync(projectPath)) {
-      console.log(`Deleting project files: ${projectPath}`)
-      fs.rmSync(projectPath, { recursive: true, force: true })
-    }
+    // Delete project directory
+    const paths = new ProjectPaths(project.name)
+    paths.remove()
 
-    // Delete project from config
-    delete projects[id]
-    projectsConfig.write(projects)
+    // Delete from index
+    projectIndex.delete(id)
 
     res.json({ success: true })
   } catch (error) {
@@ -220,14 +233,15 @@ router.delete('/:id', authMiddleware, (req, res) => {
 router.post('/:id/deploy', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
-    const projects = projectsConfig.read()
+    const projectConfig = new ProjectConfig(id)
+    const project = projectConfig.read()
 
-    if (!projects[id]) {
+    if (!project) {
       return res.status(404).json({ error: 'Project not found' })
     }
 
     // Start deployment in background
-    deployProjectV2(id).catch(error => {
+    deployProjectV3(id).catch(error => {
       console.error('Deployment error:', error)
     })
 
@@ -242,13 +256,16 @@ router.post('/:id/deploy', authMiddleware, async (req, res) => {
 router.post('/:id/stop', authMiddleware, (req, res) => {
   try {
     const { id } = req.params
-    const projects = projectsConfig.read()
+    const projectConfig = new ProjectConfig(id)
+    const project = projectConfig.read()
 
-    if (!projects[id]) {
+    if (!project) {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    stopServerV2(id)
+    stopServerV3(id)
+    projectConfig.update({ status: 'stopped' })
+    projectIndex.update(id, { status: 'stopped' })
 
     res.json({ success: true, message: 'Project stopped' })
   } catch (error) {
@@ -261,12 +278,58 @@ router.post('/:id/stop', authMiddleware, (req, res) => {
 router.get('/:id/logs', authMiddleware, (req, res) => {
   try {
     const { id } = req.params
-    const logs = getDeploymentLogs(id)
+    const { deploymentId } = req.query
 
+    const logs = getDeploymentLogs(id, deploymentId)
     res.json({ logs })
   } catch (error) {
     console.error('Error fetching logs:', error)
     res.status(500).json({ error: 'Failed to fetch logs' })
+  }
+})
+
+// Get deployment history for a project
+router.get('/:id/deployments', authMiddleware, (req, res) => {
+  try {
+    const { id } = req.params
+    const history = getDeploymentHistory(id)
+    res.json({ deployments: history })
+  } catch (error) {
+    console.error('Error fetching deployment history:', error)
+    res.status(500).json({ error: 'Failed to fetch deployment history' })
+  }
+})
+
+// Get environment variables
+router.get('/:id/env', authMiddleware, (req, res) => {
+  try {
+    const { id } = req.params
+
+    // EnvironmentVars now supports project ID directly
+    const envVars = new EnvironmentVars(id)
+    const vars = envVars.read()
+
+    res.json({ env: vars })
+  } catch (error) {
+    console.error('Error fetching env vars:', error)
+    res.status(500).json({ error: 'Failed to fetch environment variables' })
+  }
+})
+
+// Update environment variables
+router.put('/:id/env', authMiddleware, (req, res) => {
+  try {
+    const { id } = req.params
+    const { env } = req.body
+
+    // EnvironmentVars now supports project ID directly
+    const envVars = new EnvironmentVars(id)
+    envVars.write(env)
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error updating env vars:', error)
+    res.status(500).json({ error: 'Failed to update environment variables' })
   }
 })
 
