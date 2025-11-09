@@ -79,7 +79,7 @@ console.log('✅ 服务器文件复制完成\n')
 console.log('📝 创建启动脚本...')
 
 // Node.js 版本配置
-const NODE_VERSION = '20.18.1'
+const NODE_VERSION = '24.11.0'
 
 // Linux/Mac 启动脚本
 const unixStartScript = `#!/bin/bash
