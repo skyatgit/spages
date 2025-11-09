@@ -156,7 +156,7 @@
           <div class="info-grid">
             <div class="info-item">
               <label>{{ $t('settings.platformVersion') }}</label>
-              <span>SPages v0.1.0</span>
+              <span>SPages v{{ systemInfo.appVersion }}</span>
             </div>
             <div class="info-item">
               <label>{{ $t('settings.nodeVersion') }}</label>
@@ -185,6 +185,7 @@ import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount } from '@/api/github'
+import { getSystemInfo } from '@/api/system'
 
 const { t } = useI18n()
 const modal = useModal()
@@ -210,9 +211,10 @@ const storageData = ref({
 
 // System Info
 const systemInfo = ref({
-  nodeVersion: 'v20.19.0',
-  platform: 'Windows 11 (x64)',
-  dataDir: 'C:\\Users\\username\\SPages\\data'
+  appVersion: 'Loading...',
+  nodeVersion: 'Loading...',
+  platform: 'Loading...',
+  dataDir: 'Loading...'
 })
 
 const handleLogout = async () => {
@@ -264,6 +266,16 @@ const loadGithubAccounts = async () => {
     console.error('Failed to load GitHub accounts:', error)
   } finally {
     loadingAccounts.value = false
+  }
+}
+
+// Load system information
+const loadSystemInfo = async () => {
+  try {
+    const info = await getSystemInfo()
+    systemInfo.value = info
+  } catch (error) {
+    console.error('Failed to load system info:', error)
   }
 }
 
@@ -324,6 +336,7 @@ const removeAccount = async (id) => {
 // Check for OAuth callback
 onMounted(async () => {
   await loadGithubAccounts()
+  await loadSystemInfo()
 
   // Check if coming from OAuth callback
   if (route.query.success === 'github_connected') {

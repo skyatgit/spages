@@ -6,6 +6,7 @@ import { initApp } from './utils/init.js'
 import authRoutes from './routes/auth.js'
 import githubRoutes from './routes/github.js'
 import projectsRoutes from './routes/projects-v3.js'
+import systemRoutes from './routes/system.js'
 import { authMiddleware } from './utils/auth.js'
 import { projectIndex } from './services/project-manager.js'
 
@@ -28,6 +29,7 @@ app.use(express.json())
 app.use('/api/auth', authRoutes)
 app.use('/api/github', githubRoutes)
 app.use('/api/projects', projectsRoutes)
+app.use('/api/system', systemRoutes)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
 })
