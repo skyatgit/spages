@@ -84,9 +84,37 @@ export class ProjectPaths {
    * 删除整个项目目录
    */
   remove() {
-    if (fs.existsSync(this.root)) {
-      fs.rmSync(this.root, { recursive: true, force: true })
+    if (!fs.existsSync(this.root)) {
+      return
     }
+
+    // 尝试删除，如果失败则重试（Windows 文件占用问题）
+    let retries = 3
+    let lastError = null
+
+    while (retries > 0) {
+      try {
+        fs.rmSync(this.root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+        console.log(`[ProjectPaths] Successfully deleted: ${this.root}`)
+        return
+      } catch (error) {
+        lastError = error
+        retries--
+        if (retries > 0) {
+          console.warn(`[ProjectPaths] Delete failed, retrying... (${retries} attempts left)`)
+          // 等待一下再重试
+          const sleepMs = 500
+          const start = Date.now()
+          while (Date.now() - start < sleepMs) {
+            // Busy wait
+          }
+        }
+      }
+    }
+
+    // 所有重试都失败了
+    console.error(`[ProjectPaths] Failed to delete after all retries: ${this.root}`, lastError)
+    throw new Error(`Failed to delete project directory: ${lastError.message}`)
   }
 }
 

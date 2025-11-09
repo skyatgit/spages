@@ -4,7 +4,8 @@ import {
   deployProjectV3,
   stopServerV3,
   getDeploymentLogs,
-  getDeploymentHistory
+  getDeploymentHistory,
+  debugRunningProcesses
 } from '../services/deployment-v3.js'
 import {
   ProjectPaths,
@@ -57,6 +58,26 @@ router.get('/check-port/:port', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('Error checking port:', error)
     res.status(500).json({ error: 'Failed to check port' })
+  }
+})
+
+// Get next available port
+router.get('/next-available-port', authMiddleware, (req, res) => {
+  try {
+    const allProjects = projectIndex.getAll()
+    const usedPorts = Object.values(allProjects).map(p => p.port)
+
+    // Start from 3001 and find the first available port
+    let port = 3001
+    while (usedPorts.includes(port)) {
+      port++
+    }
+
+    console.log(`Next available port: ${port}`)
+    res.json({ port })
+  } catch (error) {
+    console.error('Error getting next available port:', error)
+    res.status(500).json({ error: 'Failed to get next available port' })
   }
 })
 
@@ -202,7 +223,7 @@ router.put('/:id', authMiddleware, (req, res) => {
 })
 
 // Delete project
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
     const projectConfig = new ProjectConfig(id)
@@ -212,20 +233,32 @@ router.delete('/:id', authMiddleware, (req, res) => {
       return res.status(404).json({ error: 'Project not found' })
     }
 
+    console.log(`[Delete Project] Stopping project: ${id}`)
+
     // Stop the running project before deleting
     stopServerV3(id)
+
+    // Wait for the process to fully terminate and file handles to be released (important on Windows)
+    console.log('[Delete Project] Waiting for file handles to be released...')
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    console.log(`[Delete Project] Deleting directory: ${project.name}`)
 
     // Delete project directory
     const paths = new ProjectPaths(project.name)
     paths.remove()
 
+    console.log('[Delete Project] Deleting from index...')
+
     // Delete from index
     projectIndex.delete(id)
 
+    console.log('[Delete Project] Project deleted successfully')
+
     res.json({ success: true })
   } catch (error) {
-    console.error('Error deleting project:', error)
-    res.status(500).json({ error: 'Failed to delete project' })
+    console.error('[Delete Project] Error:', error)
+    res.status(500).json({ error: `Failed to delete project: ${error.message}` })
   }
 })
 
@@ -256,21 +289,47 @@ router.post('/:id/deploy', authMiddleware, async (req, res) => {
 router.post('/:id/stop', authMiddleware, (req, res) => {
   try {
     const { id } = req.params
+    console.log(`[Stop Project] Received request to stop project: ${id}`)
+
+    debugRunningProcesses()
+
     const projectConfig = new ProjectConfig(id)
     const project = projectConfig.read()
 
     if (!project) {
-      return res.status(404).json({ error: 'Project not found' })
+      console.error(`[Stop Project] Project not found: ${id}`)
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found'
+      })
     }
 
-    stopServerV3(id)
-    projectConfig.update({ status: 'stopped' })
-    projectIndex.update(id, { status: 'stopped' })
+    console.log(`[Stop Project] Project found: ${project.name}`)
+    const stopped = stopServerV3(id)
 
-    res.json({ success: true, message: 'Project stopped' })
+    if (stopped) {
+      projectConfig.update({ status: 'stopped' })
+      projectIndex.update(id, { status: 'stopped' })
+
+      console.log(`[Stop Project] Project stopped successfully: ${id}`)
+      res.json({
+        success: true,
+        message: 'Project stopped successfully'
+      })
+    } else {
+      console.error(`[Stop Project] Failed to stop server: ${id}`)
+      res.status(500).json({
+        success: false,
+        error: 'Failed to stop server process'
+      })
+    }
   } catch (error) {
-    console.error('Error stopping project:', error)
-    res.status(500).json({ error: 'Failed to stop project' })
+    console.error('[Stop Project] Error:', error)
+    console.error('[Stop Project] Stack:', error.stack)
+    res.status(500).json({
+      success: false,
+      error: `Failed to stop project: ${error.message}`
+    })
   }
 })
 

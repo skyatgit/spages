@@ -142,7 +142,7 @@ import {
   getGithubRepositories,
   getGithubBranches
 } from '@/api/github'
-import { checkProjectName, checkPort, createProject, deployProject } from '@/api/projects'
+import { checkProjectName, checkPort, createProject, deployProject, getNextAvailablePort } from '@/api/projects'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -263,13 +263,28 @@ const loadRepositories = async () => {
   }
 }
 
-const selectRepo = (repo) => {
+const selectRepo = async (repo) => {
   selectedRepo.value = repo
-  projectName.value = repo.name
+
+  // 规范化项目名称：将 . 替换为 -，确保符合命名规则
+  const normalizedName = repo.name.replace(/\./g, '-').replace(/[^a-zA-Z0-9_-]/g, '-')
+  projectName.value = normalizedName
+
   // 加载仓库的分支列表
   loadBranches()
-  // 自动检查端口
-  checkPortAvailability()
+
+  // 自动获取下一个可用端口
+  try {
+    const availablePort = await getNextAvailablePort()
+    port.value = availablePort
+    // 立即检查端口可用性，不等待 watch 的防抖
+    await checkPortAvailability()
+  } catch (error) {
+    console.error('Failed to get next available port:', error)
+    // 失败时使用默认端口并检查
+    port.value = 3001
+    await checkPortAvailability()
+  }
 }
 
 const loadBranches = async () => {

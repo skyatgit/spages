@@ -72,7 +72,25 @@ export default {
     projectUpdateFailed: '更新项目失败',
     deleteConfirm: '确定要删除此项目吗？这将停止运行中的服务。',
     projectDeleted: '项目已删除',
-    deleteFailed: '删除项目失败'
+    deleteFailed: '删除项目失败',
+    stop: '停止',
+    stopConfirm: '确定要停止此项目吗？',
+    projectStopped: '项目已停止',
+    stopFailed: '停止项目失败',
+    deletingProject: '正在删除项目',
+    deleteStep1: '停止运行中的服务',
+    deleteStep1Desc: '正在终止项目服务器...',
+    deleteStep2: '等待资源释放',
+    deleteStep2Desc: '正在等待文件句柄释放...',
+    deleteStep3: '删除项目文件',
+    deleteStep3Desc: '正在删除项目目录和文件...',
+    deleteStep4: '清理项目索引',
+    deleteStep4Desc: '正在从项目列表中移除...',
+    stoppingProject: '正在停止项目',
+    stopStep1: '关闭 HTTP 服务器',
+    stopStep1Desc: '正在关闭项目的 HTTP 服务...',
+    stopStep2: '更新项目状态',
+    stopStep2Desc: '正在更新项目状态为已停止...'
   },
 
   addProject: {

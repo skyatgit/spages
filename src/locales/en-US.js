@@ -72,7 +72,25 @@ export default {
     projectUpdateFailed: 'Failed to update project',
     deleteConfirm: 'Are you sure you want to delete this project? This will stop the running service.',
     projectDeleted: 'Project deleted',
-    deleteFailed: 'Failed to delete project'
+    deleteFailed: 'Failed to delete project',
+    stop: 'Stop',
+    stopConfirm: 'Are you sure you want to stop this project?',
+    projectStopped: 'Project stopped',
+    stopFailed: 'Failed to stop project',
+    deletingProject: 'Deleting Project',
+    deleteStep1: 'Stopping service',
+    deleteStep1Desc: 'Terminating project server...',
+    deleteStep2: 'Releasing resources',
+    deleteStep2Desc: 'Waiting for file handles to be released...',
+    deleteStep3: 'Deleting files',
+    deleteStep3Desc: 'Removing project directory and files...',
+    deleteStep4: 'Cleaning up',
+    deleteStep4Desc: 'Removing from project list...',
+    stoppingProject: 'Stopping Project',
+    stopStep1: 'Closing HTTP server',
+    stopStep1Desc: 'Shutting down project HTTP service...',
+    stopStep2: 'Updating status',
+    stopStep2Desc: 'Updating project status to stopped...'
   },
 
   addProject: {

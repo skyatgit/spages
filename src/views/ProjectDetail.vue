@@ -130,6 +130,12 @@
         </div>
       </div>
     </div>
+
+    <DeleteProgressModal
+      ref="deleteProgressModal"
+      :show="showDeleteProgress"
+      @close="showDeleteProgress = false"
+    />
   </Layout>
 </template>
 
@@ -140,6 +146,7 @@ import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import LogViewer from '@/components/LogViewer.vue'
+import DeleteProgressModal from '@/components/DeleteProgressModal.vue'
 import { useModal } from '@/utils/modal'
 import { projectsAPI, deployProject as apiDeployProject, getDeploymentHistory, getEnvVars, updateEnvVars, getProjectLogs } from '@/api/projects'
 
@@ -166,6 +173,8 @@ const project = ref({
 
 const isDeploying = ref(false)
 const loading = ref(true)
+const showDeleteProgress = ref(false)
+const deleteProgressModal = ref(null)
 
 // 页面加载时获取项目详情
 onMounted(async () => {
@@ -276,15 +285,36 @@ const deploy = async () => {
 
 const deleteProject = async () => {
   const confirmed = await modal.confirm(t('projectDetail.deleteConfirm'))
-  if (confirmed) {
-    try {
-      await projectsAPI.deleteProject(projectId)
-      await modal.alert(t('projectDetail.projectDeleted'))
-      router.push('/')
-    } catch (error) {
-      console.error('Failed to delete project:', error)
-      await modal.alert(t('projectDetail.deleteFailed'))
-    }
+  if (!confirmed) return
+
+  // 显示进度 Modal
+  showDeleteProgress.value = true
+  deleteProgressModal.value.reset()
+
+  try {
+    // Step 1: 停止服务
+    deleteProgressModal.value.setStep(0)
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    // Step 2: 等待资源释放
+    deleteProgressModal.value.setStep(1)
+    await new Promise(resolve => setTimeout(resolve, 200))
+
+    // Step 3 & 4: 删除项目（后端会处理这两步）
+    deleteProgressModal.value.setStep(2)
+    await projectsAPI.deleteProject(projectId)
+
+    deleteProgressModal.value.setStep(3)
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    // 完成
+    showDeleteProgress.value = false
+    await modal.alert(t('projectDetail.projectDeleted'))
+    router.push('/')
+  } catch (error) {
+    console.error('Failed to delete project:', error)
+    const errorMsg = error.response?.data?.error || error.message
+    deleteProgressModal.value.setError(errorMsg)
   }
 }
 

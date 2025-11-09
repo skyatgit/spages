@@ -37,6 +37,14 @@
       <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-small" @click.stop>
         {{ $t('dashboard.visitSite') }}
       </a>
+      <button
+        v-if="project.status === 'running'"
+        class="btn btn-small btn-stop"
+        @click.stop="$emit('stop', project.id)"
+        title="停止项目"
+      >
+        ⏹️ {{ $t('dashboard.stop') }}
+      </button>
       <button class="btn btn-small btn-primary" @click.stop="$emit('deploy', project.id)">
         {{ $t('dashboard.deploy') }}
       </button>
@@ -57,7 +65,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['click', 'deploy', 'edit', 'delete'])
+const emit = defineEmits(['click', 'deploy', 'edit', 'delete', 'stop'])
 
 const handleClick = () => {
   emit('click', props.project.id)
@@ -195,5 +203,14 @@ const formatDate = (date) => {
 .btn-logs:hover {
   background: #2980b9;
   transform: scale(1.1);
+}
+
+.btn-stop {
+  background: #e67e22;
+  color: white;
+}
+
+.btn-stop:hover {
+  background: #d35400;
 }
 </style>

@@ -1,6 +1,8 @@
-import { exec, spawn } from 'child_process'
+import { exec, spawn, execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs'
+import http from 'http'
+import os from 'os'
 import { githubAccountsConfig } from '../utils/config.js'
 import {
   detectRequiredNodeVersion,
@@ -17,9 +19,11 @@ import {
   DeploymentHistory,
   projectIndex
 } from './project-manager.js'
+import { detectFramework } from './framework-detector.js'
 
-// Store running processes
+// Store running processes and their connections
 const runningProcesses = new Map()
+const serverConnections = new Map() // 存储每个服务器的活动连接
 
 /**
  * 部署日志管理
@@ -114,61 +118,92 @@ export async function deployProjectV3(projectId) {
     projectIndex.update(projectId, { status: 'building' })
 
     // Step 1: Clone repository
-    logger.info('Step 1/5: Cloning repository...')
+    logger.info('Step 1/6: Cloning repository...')
     await cloneRepository(project, paths, logger)
     logger.success('Repository cloned successfully')
 
-    // Step 2: Detect Node version
-    const requiredVersion = await detectRequiredNodeVersion(paths.source)
-    logger.info(`Detected Node version requirement: ${requiredVersion}`)
+    // Step 2: Detect framework
+    logger.info('Step 2/6: Detecting framework...')
+    const frameworkInfo = detectFramework(paths.source)
+    logger.info(`Detected framework: ${frameworkInfo.name}`)
+    logger.info(`Build required: ${frameworkInfo.needsBuild}`)
+    logger.info(`Output directory: ${frameworkInfo.outputDir}`)
 
-    let nodeVersion = requiredVersion
-    if (requiredVersion === 'system') {
-      nodeVersion = await getSystemNodeVersion()
-      logger.info(`Using system Node version: v${nodeVersion}`)
-    } else if (!isNodeVersionInstalled(requiredVersion)) {
-      logger.info(`Node v${requiredVersion} not installed, downloading...`)
+    // Store framework info in project config
+    projectConfig.update({
+      framework: frameworkInfo.framework,
+      buildTool: frameworkInfo.buildTool,
+      frameworkType: frameworkInfo.type,
+      outputDir: frameworkInfo.outputDir
+    })
 
-      try {
-        // 自动下载并安装 Node.js
-        nodeVersion = await installNodeVersion(requiredVersion, (progress) => {
-          logger.info(progress)
-        })
-        logger.success(`Node v${nodeVersion} installed successfully`)
-      } catch (error) {
-        logger.error(`Failed to install Node v${requiredVersion}: ${error.message}`)
-        logger.warn('Falling back to system Node')
+    // Step 3: Detect Node version
+    let nodeVersion = 'system'
+
+    // Only detect and install Node version if build is needed
+    if (frameworkInfo.needsBuild) {
+      const requiredVersion = await detectRequiredNodeVersion(paths.source)
+      logger.info(`Detected Node version requirement: ${requiredVersion}`)
+
+      nodeVersion = requiredVersion
+      if (requiredVersion === 'system') {
         nodeVersion = await getSystemNodeVersion()
-      }
-    } else {
-      // 已安装，解析具体版本
-      const installedVersions = fs.readdirSync(path.join(process.cwd(), 'runtime', 'node-versions'))
-        .filter(dir => dir.startsWith('node-v'))
-        .map(dir => dir.replace('node-v', ''))
+        logger.info(`Using system Node version: v${nodeVersion}`)
+      } else if (!isNodeVersionInstalled(requiredVersion)) {
+        logger.info(`Node v${requiredVersion} not installed, downloading...`)
 
-      // 找到匹配的版本
-      for (const version of installedVersions) {
-        if (requiredVersion.includes(version)) {
-          nodeVersion = version
-          logger.info(`Using installed Node version: v${nodeVersion}`)
-          break
+        try {
+          // 自动下载并安装 Node.js
+          nodeVersion = await installNodeVersion(requiredVersion, (progress) => {
+            logger.info(progress)
+          })
+          logger.success(`Node v${nodeVersion} installed successfully`)
+        } catch (error) {
+          logger.error(`Failed to install Node v${requiredVersion}: ${error.message}`)
+          logger.warn('Falling back to system Node')
+          nodeVersion = await getSystemNodeVersion()
+        }
+      } else {
+        // 已安装，解析具体版本
+        const installedVersions = fs.readdirSync(path.join(process.cwd(), 'runtime', 'node-versions'))
+          .filter(dir => dir.startsWith('node-v'))
+          .map(dir => dir.replace('node-v', ''))
+
+        // 找到匹配的版本
+        for (const version of installedVersions) {
+          if (requiredVersion.includes(version)) {
+            nodeVersion = version
+            logger.info(`Using installed Node version: v${nodeVersion}`)
+            break
+          }
         }
       }
+    } else {
+      logger.info('Static project detected, using system Node for serving')
+      nodeVersion = 'system'
     }
 
-    // Step 3: Install dependencies
-    logger.info('Step 2/5: Installing dependencies...')
-    await installDependencies(paths.source, nodeVersion, logger)
-    logger.success('Dependencies installed successfully')
+    // Step 4: Install dependencies
+    if (frameworkInfo.installDeps) {
+      logger.info('Step 4/6: Installing dependencies...')
+      await installDependencies(paths.source, nodeVersion, logger)
+      logger.success('Dependencies installed successfully')
+    } else {
+      logger.info('Step 4/6: Skipping dependency installation (not required)')
+    }
 
-    // Step 4: Build project
-    logger.info('Step 3/5: Building project...')
-    await buildProject(project, paths.source, nodeVersion, logger)
-    logger.success('Build completed successfully')
+    // Step 5: Build project
+    if (frameworkInfo.needsBuild) {
+      logger.info('Step 5/6: Building project...')
+      await buildProject(project, paths.source, nodeVersion, logger, frameworkInfo)
+      logger.success('Build completed successfully')
+    } else {
+      logger.info('Step 5/6: Skipping build (static project)')
+    }
 
-    // Step 5: Start server
-    logger.info('Step 4/5: Starting server...')
-    await startServer(project, paths, nodeVersion, logger)
+    // Step 6: Start server
+    logger.info('Step 6/6: Starting server...')
+    await startServer(project, paths, nodeVersion, logger, frameworkInfo)
     logger.success(`Server started on port ${project.port}`)
 
     // Update status to running
@@ -276,7 +311,7 @@ async function installDependencies(sourcePath, nodeVersion, logger) {
 /**
  * Build project
  */
-async function buildProject(project, sourcePath, nodeVersion, logger) {
+async function buildProject(project, sourcePath, nodeVersion, logger, frameworkInfo) {
   const packageJsonPath = path.join(sourcePath, 'package.json')
 
   if (!fs.existsSync(packageJsonPath)) {
@@ -285,12 +320,16 @@ async function buildProject(project, sourcePath, nodeVersion, logger) {
   }
 
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
-  const buildScript = project.buildCommand || packageJson.scripts?.build
 
-  if (!buildScript) {
+  // Use framework info build command, then fallback to project config, then package.json
+  const buildCommand = frameworkInfo.buildCommand || project.buildCommand || packageJson.scripts?.build
+
+  if (!buildCommand) {
     logger.info('No build script found, skipping build')
     return
   }
+
+  logger.info(`Build command: ${buildCommand}`)
 
   await execWithNodeVersion('npm run build', nodeVersion, sourcePath, (data, type) => {
     logger.info(data.trim())
@@ -300,8 +339,12 @@ async function buildProject(project, sourcePath, nodeVersion, logger) {
 /**
  * Start server
  */
-async function startServer(project, paths, nodeVersion, logger) {
-  const distPath = path.join(paths.source, project.outputDir || 'dist')
+async function startServer(project, paths, nodeVersion, logger, frameworkInfo) {
+  // Use framework info output dir, then fallback to project config, then default to 'dist'
+  const outputDir = frameworkInfo.outputDir || project.outputDir || 'dist'
+  const distPath = path.join(paths.source, outputDir)
+
+  logger.info(`Looking for output directory: ${outputDir}`)
 
   if (!fs.existsSync(distPath)) {
     throw new Error(`Output directory not found: ${distPath}`)
@@ -310,95 +353,191 @@ async function startServer(project, paths, nodeVersion, logger) {
   // Stop existing process if any
   stopServerV3(project.id)
 
-  // 获取 npx 路径
-  let npxPath
-  if (nodeVersion === 'system') {
-    npxPath = process.platform === 'win32' ? 'npx.cmd' : 'npx'
-  } else {
-    const npmPath = getNpmExecutablePath(nodeVersion)
-    npxPath = npmPath.replace(/npm(\.cmd)?$/, 'npx$1')
-  }
-
-  logger.info(`Node version: ${nodeVersion}`)
-  logger.info(`NPX path: ${npxPath}`)
   logger.info(`Serving from: ${distPath}`)
   logger.info(`Port: ${project.port}`)
-  logger.info(`Working directory: ${paths.source}`)
 
-  // 检查 npx 是否存在
-  if (nodeVersion !== 'system' && !fs.existsSync(npxPath)) {
-    throw new Error(`npx not found at: ${npxPath}`)
-  }
+  // 所有项目都使用内置的 HTTP 服务器（不再使用 npx serve）
+  // 这样可以避免跨平台的进程管理问题，server.close() 在所有平台都工作良好
+  logger.info('Starting built-in static file server...')
+  return startStaticServer(project, distPath, logger)
+}
 
+/**
+ * Start static file server using Node.js built-in http module
+ * 通用的静态文件服务器，支持所有项目类型
+ */
+function startStaticServer(project, distPath, logger) {
   return new Promise((resolve, reject) => {
-    const args = ['serve', '-s', distPath, '-l', project.port.toString()]
-    logger.info(`Spawn command: ${npxPath} ${args.join(' ')}`)
+    const mimeTypes = {
+      '.html': 'text/html; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.js': 'text/javascript; charset=utf-8',
+      '.json': 'application/json; charset=utf-8',
+      '.xml': 'application/xml; charset=utf-8',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
+      '.webp': 'image/webp',
+      '.woff': 'font/woff',
+      '.woff2': 'font/woff2',
+      '.ttf': 'font/ttf',
+      '.eot': 'application/vnd.ms-fontobject',
+      '.otf': 'font/otf',
+      '.txt': 'text/plain; charset=utf-8',
+      '.pdf': 'application/pdf',
+      '.zip': 'application/zip',
+      '.mp4': 'video/mp4',
+      '.webm': 'video/webm',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.wasm': 'application/wasm'
+    }
 
-    const serverProcess = spawn(npxPath, args, {
-      cwd: paths.source,
-      detached: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true
-    })
+    const server = http.createServer((req, res) => {
+      // 解析 URL，移除查询参数
+      const urlPath = req.url.split('?')[0]
+      let filePath = path.join(distPath, urlPath === '/' ? 'index.html' : urlPath)
 
-    let hasError = false
-    let errorOutput = ''
+      // 安全检查：防止路径遍历攻击
+      const normalizedPath = path.normalize(filePath)
+      if (!normalizedPath.startsWith(distPath)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' })
+        res.end('403 Forbidden')
+        logger.warn(`Path traversal attempt blocked: ${req.url}`)
+        return
+      }
 
-    serverProcess.stdout.on('data', (data) => {
-      const output = data.toString().trim()
-      logger.info(output)
-    })
+      // 检查文件是否存在
+      fs.stat(filePath, (err, stats) => {
+        if (err || !stats.isFile()) {
+          // 如果是目录，尝试 index.html
+          if (stats && stats.isDirectory()) {
+            filePath = path.join(filePath, 'index.html')
+            if (!fs.existsSync(filePath)) {
+              // 目录但没有 index.html，尝试返回根 index.html（SPA 路由）
+              filePath = path.join(distPath, 'index.html')
+            }
+          } else {
+            // 文件不存在，返回 index.html（SPA 路由支持）
+            filePath = path.join(distPath, 'index.html')
+          }
 
-    serverProcess.stderr.on('data', (data) => {
-      const output = data.toString().trim()
-      errorOutput += output + '\n'
-      logger.warn(output)
-    })
-
-    serverProcess.on('error', (error) => {
-      hasError = true
-      logger.error(`Failed to start server: ${error.message}`)
-      reject(error)
-    })
-
-    serverProcess.on('exit', (code) => {
-      if (code !== 0 && !runningProcesses.has(project.id)) {
-        logger.error(`Server process exited with code ${code}`)
-        if (errorOutput) {
-          logger.error(`Error output: ${errorOutput}`)
+          // 如果 index.html 也不存在
+          if (!fs.existsSync(filePath)) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' })
+            res.end('404 Not Found')
+            return
+          }
         }
 
-        const projectConfig = new ProjectConfig(project.name)
-        projectConfig.update({ status: 'stopped' })
-        projectIndex.update(project.id, { status: 'stopped' })
-      }
+        // 获取 MIME 类型
+        const ext = path.extname(filePath).toLowerCase()
+        const contentType = mimeTypes[ext] || 'application/octet-stream'
 
-      logger.info(`Server exited with code ${code}`)
-      runningProcesses.delete(project.id)
+        // 读取并返回文件
+        fs.readFile(filePath, (err, data) => {
+          if (err) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' })
+            res.end('500 Internal Server Error')
+            logger.error(`Error reading file ${filePath}: ${err.message}`)
+            return
+          }
+
+          // 设置缓存头（静态资源缓存 1 小时）
+          const headers = {
+            'Content-Type': contentType,
+            'Content-Length': data.length
+          }
+
+          // 对于不是 HTML 的文件，添加缓存
+          if (ext !== '.html') {
+            headers['Cache-Control'] = 'public, max-age=3600'
+          }
+
+          res.writeHead(200, headers)
+          res.end(data)
+        })
+      })
     })
 
-    // 保存进程引用
-    runningProcesses.set(project.id, serverProcess)
-
-    // 等待服务器启动
-    setTimeout(() => {
-      if (!hasError) {
-        resolve()
+    // 错误处理
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        logger.error(`Port ${project.port} is already in use`)
+        reject(new Error(`Port ${project.port} is already in use`))
+      } else {
+        logger.error(`Failed to start static server: ${error.message}`)
+        reject(error)
       }
-    }, 3000)
+    })
+
+    // 跟踪所有连接，以便在停止时立即关闭
+    const connections = new Set()
+
+    server.on('connection', (conn) => {
+      connections.add(conn)
+      conn.on('close', () => {
+        connections.delete(conn)
+      })
+    })
+
+    // 启动服务器
+    server.listen(project.port, () => {
+      logger.info(`Static server started on http://localhost:${project.port}`)
+      logger.info(`Serving directory: ${distPath}`)
+      runningProcesses.set(project.id, server)
+      serverConnections.set(project.id, connections)
+      resolve()
+    })
   })
 }
 
 /**
- * Stop server
+ * Stop server - 简化版本，只处理 HTTP 服务器
+ * 所有项目现在都使用内置的 HTTP 服务器，不再有子进程
+ * 这使得停止功能完全跨平台，无需任何平台特定代码
  */
 export function stopServerV3(projectId) {
-  const process = runningProcesses.get(projectId)
+  const server = runningProcesses.get(projectId)
+  const connections = serverConnections.get(projectId)
 
-  if (process) {
-    console.log(`Stopping server for project: ${projectId}`)
-    process.kill()
-    runningProcesses.delete(projectId)
+  if (server) {
+    console.log(`[stopServerV3] Stopping HTTP server for project: ${projectId}`)
+
+    try {
+      // 首先强制关闭所有活动连接
+      if (connections) {
+        console.log(`[stopServerV3] Destroying ${connections.size} active connections`)
+        for (const conn of connections) {
+          conn.destroy() // 立即终止连接
+        }
+        serverConnections.delete(projectId)
+      }
+
+      // 然后关闭服务器
+      server.close((err) => {
+        if (err) {
+          console.error(`[stopServerV3] Error closing server: ${err.message}`)
+        } else {
+          console.log(`[stopServerV3] HTTP server closed successfully for project: ${projectId}`)
+        }
+      })
+
+      // 立即从 map 中删除
+      runningProcesses.delete(projectId)
+      return true
+    } catch (error) {
+      console.error(`[stopServerV3] Error stopping server: ${error.message}`)
+      // 即使出错也删除引用，避免泄漏
+      runningProcesses.delete(projectId)
+      return false
+    }
+  } else {
+    console.log(`[stopServerV3] No running server found for project: ${projectId}`)
+    return false
   }
 }
 
@@ -471,7 +610,32 @@ function parseLogFile(logFile) {
  * Get all running processes
  */
 export function getRunningProcessesV3() {
-  return Array.from(runningProcesses.keys())
+  const servers = []
+  for (const [projectId, server] of runningProcesses.entries()) {
+    // 获取服务器监听的地址
+    const address = server.address()
+    servers.push({
+      projectId,
+      port: address ? address.port : 'unknown',
+      type: 'http_server'
+    })
+  }
+  return servers
+}
+
+/**
+ * Debug: List all running servers
+ */
+export function debugRunningProcesses() {
+  console.log('[Debug] Current running HTTP servers:')
+  for (const [projectId, server] of runningProcesses.entries()) {
+    const address = server.address()
+    console.log(`  - Project: ${projectId}`)
+    console.log(`    Type: HTTP Server`)
+    console.log(`    Port: ${address ? address.port : 'unknown'}`)
+    console.log(`    Listening: ${server.listening}`)
+  }
+  console.log(`[Debug] Total: ${runningProcesses.size} servers`)
 }
 
 /**

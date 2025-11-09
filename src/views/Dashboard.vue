@@ -29,6 +29,7 @@
           @deploy="handleDeploy(project.id)"
           @edit="handleEdit"
           @delete="handleDelete"
+          @stop="handleStop"
         />
       </div>
     </div>
@@ -37,6 +38,18 @@
       v-model="showEditModal"
       :project="editingProject"
       @save="handleSaveProject"
+    />
+
+    <DeleteProgressModal
+      ref="deleteProgressModal"
+      :show="showDeleteProgress"
+      @close="showDeleteProgress = false"
+    />
+
+    <StopProgressModal
+      ref="stopProgressModal"
+      :show="showStopProgress"
+      @close="showStopProgress = false"
     />
   </Layout>
 </template>
@@ -48,6 +61,8 @@ import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
 import ProjectCard from '@/components/ProjectCard.vue'
 import EditProjectModal from '@/components/EditProjectModal.vue'
+import DeleteProgressModal from '@/components/DeleteProgressModal.vue'
+import StopProgressModal from '@/components/StopProgressModal.vue'
 import { useModal } from '@/utils/modal'
 import { projectsAPI, deployProject } from '@/api/projects'
 
@@ -59,6 +74,10 @@ const showEditModal = ref(false)
 const editingProject = ref(null)
 const projects = ref([])
 const loading = ref(true)
+const showDeleteProgress = ref(false)
+const deleteProgressModal = ref(null)
+const showStopProgress = ref(false)
+const stopProgressModal = ref(null)
 
 // 页面加载时获取项目列表
 onMounted(async () => {
@@ -122,14 +141,70 @@ const handleDelete = async (projectId) => {
   const confirmed = await modal.confirm(t('dashboard.deleteConfirm'))
   if (!confirmed) return
 
+  // 显示进度 Modal
+  showDeleteProgress.value = true
+  deleteProgressModal.value.reset()
+
   try {
+    // Step 1: 停止服务
+    deleteProgressModal.value.setStep(0)
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    // Step 2: 等待资源释放
+    deleteProgressModal.value.setStep(1)
+    await new Promise(resolve => setTimeout(resolve, 200))
+
+    // Step 3 & 4: 删除项目（后端会处理这两步）
+    deleteProgressModal.value.setStep(2)
     await projectsAPI.deleteProject(projectId)
+
+    deleteProgressModal.value.setStep(3)
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    // 完成
+    showDeleteProgress.value = false
     await modal.alert(t('dashboard.projectDeleted'))
+
     // 刷新项目列表
     await loadProjects()
   } catch (error) {
     console.error('Failed to delete project:', error)
-    await modal.alert(t('dashboard.deleteFailed'))
+    const errorMsg = error.response?.data?.error || error.message
+    deleteProgressModal.value.setError(errorMsg)
+  }
+}
+
+const handleStop = async (projectId) => {
+  const confirmed = await modal.confirm(t('dashboard.stopConfirm'))
+  if (!confirmed) return
+
+  // 显示进度 Modal
+  showStopProgress.value = true
+  stopProgressModal.value.reset()
+
+  try {
+    console.log('[Dashboard] Stopping project:', projectId)
+
+    // Step 1: 关闭 HTTP 服务器
+    stopProgressModal.value.setStep(0)
+    const result = await projectsAPI.stopProject(projectId)
+    console.log('[Dashboard] Stop result:', result)
+
+    // Step 2: 更新项目状态
+    stopProgressModal.value.setStep(1)
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    // 完成
+    showStopProgress.value = false
+    await modal.alert(t('dashboard.projectStopped'))
+
+    // 刷新项目列表
+    await loadProjects()
+  } catch (error) {
+    console.error('[Dashboard] Failed to stop project:', error)
+    console.error('[Dashboard] Error details:', error.response?.data || error.message)
+    const errorMsg = error.response?.data?.error || error.message
+    stopProgressModal.value.setError(errorMsg)
   }
 }
 </script>

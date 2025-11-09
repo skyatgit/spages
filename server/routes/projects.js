@@ -62,6 +62,26 @@ router.get('/check-port/:port', authMiddleware, (req, res) => {
   }
 })
 
+// Get next available port
+router.get('/next-available-port', authMiddleware, (req, res) => {
+  try {
+    const projects = projectsConfig.read()
+    const usedPorts = Object.values(projects).map(p => p.port)
+
+    // Start from 3001 and find the first available port
+    let port = 3001
+    while (usedPorts.includes(port)) {
+      port++
+    }
+
+    console.log(`Next available port: ${port}`)
+    res.json({ port })
+  } catch (error) {
+    console.error('Error getting next available port:', error)
+    res.status(500).json({ error: 'Failed to get next available port' })
+  }
+})
+
 // Get all projects
 router.get('/', authMiddleware, (req, res) => {
   try {

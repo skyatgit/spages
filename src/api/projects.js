@@ -24,6 +24,11 @@ export const projectsAPI = {
   // Delete project
   deleteProject(id) {
     return apiClient.delete(`/projects/${id}`)
+  },
+
+  // Stop project
+  stopProject(id) {
+    return apiClient.post(`/projects/${id}/stop`)
   }
 }
 
@@ -40,6 +45,11 @@ export const checkPort = async (port) => {
   const response = await apiClient.get(`/projects/check-port/${port}`)
   console.log('API: Response:', response)
   return response
+}
+
+export const getNextAvailablePort = async () => {
+  const response = await apiClient.get('/projects/next-available-port')
+  return response.port
 }
 
 export const createProject = async (data) => {
