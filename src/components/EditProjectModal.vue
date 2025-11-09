@@ -106,6 +106,8 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getGithubBranches } from '@/api/github'
+import { checkPort as apiCheckPort } from '@/api/projects'
 
 const { t } = useI18n()
 
@@ -131,16 +133,13 @@ const formData = ref({
   outputDir: 'dist'
 })
 
-const branches = ref(['main', 'master', 'develop'])
+const branches = ref([])
 const loadingBranches = ref(false)
 const portError = ref('')
 const portChecking = ref(false)
 const portAvailable = ref(false)
 const originalPort = ref(null)
 let portCheckTimer = null
-
-// 已使用的端口列表（模拟，应该从父组件传入或从后端获取）
-const usedPorts = ref([3001, 3002, 3003])
 
 // 监听端口变化，实时检查
 watch(() => formData.value.port, (newPort) => {
@@ -173,17 +172,11 @@ const checkPort = async () => {
   portChecking.value = true
 
   try {
-    // TODO: 调用后端 API 检查端口是否被占用
-    // const response = await fetch(`/api/check-port/${formData.value.port}?excludeProject=${props.project.id}`)
-    // const data = await response.json()
-
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 300))
-
-    if (usedPorts.value.includes(formData.value.port)) {
-      portError.value = t('addProject.portInUse')
-    } else {
+    const result = await apiCheckPort(formData.value.port)
+    if (result && result.available === true) {
       portAvailable.value = true
+    } else {
+      portError.value = t('addProject.portInUse')
     }
   } catch (error) {
     console.error('Failed to check port:', error)
@@ -194,20 +187,23 @@ const checkPort = async () => {
 }
 
 const loadBranches = async () => {
-  if (!props.project?.repository) return
+  if (!props.project?.accountId || !props.project?.owner || !props.project?.repo) {
+    console.warn('Missing accountId, owner, or repo for loading branches')
+    return
+  }
 
   loadingBranches.value = true
   try {
-    // TODO: 调用后端 API 获取实际的分支列表
-    // const response = await fetch(`/api/projects/${props.project.id}/branches`)
-    // branches.value = await response.json()
-
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 500))
-    branches.value = ['main', 'master', 'develop', 'staging', 'production', 'feature/new-ui']
+    const branchList = await getGithubBranches(
+      props.project.accountId,
+      props.project.owner,
+      props.project.repo
+    )
+    branches.value = branchList
   } catch (error) {
     console.error('Failed to load branches:', error)
-    branches.value = ['main', 'master', 'develop']
+    // 使用当前分支作为后备
+    branches.value = [props.project.branch || 'main']
   } finally {
     loadingBranches.value = false
   }

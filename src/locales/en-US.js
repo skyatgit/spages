@@ -66,6 +66,7 @@ export default {
       pending: 'Pending'
     },
     loadProjectsFailed: 'Failed to load projects',
+    loadProjectFailed: 'Failed to load project details',
     deploymentStarted: 'Deployment started',
     deploymentFailed: 'Deployment failed',
     projectUpdated: 'Project configuration updated!',

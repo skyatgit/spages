@@ -66,6 +66,7 @@ export default {
       pending: '等待中'
     },
     loadProjectsFailed: '加载项目列表失败',
+    loadProjectFailed: '加载项目详情失败',
     deploymentStarted: '部署已开始',
     deploymentFailed: '部署失败',
     projectUpdated: '项目配置已更新！',

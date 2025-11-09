@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
@@ -82,6 +82,22 @@ const stopProgressModal = ref(null)
 // 页面加载时获取项目列表
 onMounted(async () => {
   await loadProjects()
+
+  // 启动自动刷新（每5秒刷新一次状态）
+  const refreshInterval = setInterval(async () => {
+    // 静默刷新，不显示 loading
+    try {
+      const projectList = await projectsAPI.getProjects()
+      projects.value = projectList
+    } catch (error) {
+      console.error('Failed to refresh projects:', error)
+    }
+  }, 5000)
+
+  // 组件卸载时清除定时器
+  onUnmounted(() => {
+    clearInterval(refreshInterval)
+  })
 })
 
 // 加载项目列表
@@ -104,19 +120,31 @@ const goToProject = (id) => {
 
 const handleDeploy = async (id) => {
   try {
-    await deployProject(id)
-    await modal.alert(t('dashboard.deploymentStarted'))
-    // 刷新项目列表以显示最新状态
+    // 启动部署（不等待完成）
+    deployProject(id).catch(err => {
+      console.error('Deployment failed:', err)
+    })
+
+    // 立即刷新状态，显示"部署中"
     await loadProjects()
+
+    await modal.alert(t('dashboard.deploymentStarted'))
   } catch (error) {
     console.error('Failed to deploy project:', error)
     await modal.alert(t('dashboard.deploymentFailed'))
   }
 }
 
-const handleEdit = (project) => {
-  editingProject.value = project
-  showEditModal.value = true
+const handleEdit = async (project) => {
+  try {
+    // 从后端获取完整的项目信息（包含 accountId, owner, repo 等）
+    const fullProject = await projectsAPI.getProject(project.id)
+    editingProject.value = fullProject
+    showEditModal.value = true
+  } catch (error) {
+    console.error('Failed to load project details:', error)
+    await modal.alert(t('dashboard.loadProjectFailed'))
+  }
 }
 
 const handleSaveProject = async (updatedProject) => {

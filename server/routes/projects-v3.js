@@ -5,7 +5,8 @@ import {
   stopServerV3,
   getDeploymentLogs,
   getDeploymentHistory,
-  debugRunningProcesses
+  debugRunningProcesses,
+  getProjectRealStatus
 } from '../services/deployment-v3.js'
 import {
   ProjectPaths,
@@ -85,11 +86,17 @@ router.get('/next-available-port', authMiddleware, (req, res) => {
 router.get('/', authMiddleware, (req, res) => {
   try {
     const projects = projectIndex.getAll()
-    // Add ID to each project object
-    const projectList = Object.entries(projects).map(([id, project]) => ({
-      id,
-      ...project
-    }))
+    // Add ID to each project object and use real-time status
+    const projectList = Object.entries(projects).map(([id, project]) => {
+      // 获取真实的实时状态（基于 runningProcesses 和 deployingProjects）
+      const actualStatus = getProjectRealStatus(id)
+
+      return {
+        id,
+        ...project,
+        status: actualStatus // 使用真实状态，不使用存储的状态
+      }
+    })
     res.json(projectList)
   } catch (error) {
     console.error('Error fetching projects:', error)
@@ -108,7 +115,13 @@ router.get('/:id', authMiddleware, (req, res) => {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    res.json(project)
+    // 获取真实的实时状态（基于 runningProcesses 和 deployingProjects）
+    const actualStatus = getProjectRealStatus(id)
+
+    res.json({
+      ...project,
+      status: actualStatus // 使用真实状态，不使用存储的状态
+    })
   } catch (error) {
     console.error('Error fetching project:', error)
     res.status(500).json({ error: 'Failed to fetch project' })
@@ -172,10 +185,13 @@ router.post('/', authMiddleware, async (req, res) => {
     // Add to index
     projectIndex.update(projectId, {
       name,
+      accountId,
+      repository,
+      owner,
+      repo,
       path: `projects/${name}`,
       port: parseInt(port),
       status: 'pending',
-      repository,
       branch,
       lastDeploy: null,
       url: null,

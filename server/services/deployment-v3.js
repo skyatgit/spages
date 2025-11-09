@@ -24,6 +24,7 @@ import { detectFramework } from './framework-detector.js'
 // Store running processes and their connections
 const runningProcesses = new Map()
 const serverConnections = new Map() // 存储每个服务器的活动连接
+const deployingProjects = new Map() // 存储正在部署的项目 ID
 
 /**
  * 部署日志管理
@@ -113,6 +114,9 @@ export async function deployProjectV3(projectId) {
   logger.info(`Starting deployment for project: ${project.name}`)
 
   try {
+    // 标记为部署中
+    deployingProjects.set(projectId, true)
+
     // Update status to building
     projectConfig.update({ status: 'building' })
     projectIndex.update(projectId, { status: 'building' })
@@ -230,10 +234,16 @@ export async function deployProjectV3(projectId) {
     logger.success('✅ Deployment completed successfully!')
     logger.close()
 
+    // 移除部署中标记
+    deployingProjects.delete(projectId)
+
     return { success: true, logs: logger.getLogs() }
   } catch (error) {
     logger.error(`❌ Deployment failed: ${error.message}`)
     logger.close()
+
+    // 移除部署中标记
+    deployingProjects.delete(projectId)
 
     const duration = Date.now() - deployment.startTime
     projectConfig.update({ status: 'failed' })
@@ -636,6 +646,41 @@ export function debugRunningProcesses() {
     console.log(`    Listening: ${server.listening}`)
   }
   console.log(`[Debug] Total: ${runningProcesses.size} servers`)
+}
+
+/**
+ * Get real-time project status (not from stored config)
+ * Returns: 'running', 'building', 'stopped', 'failed'
+ */
+export function getProjectRealStatus(projectId) {
+  // 检查是否正在部署
+  if (deployingProjects.has(projectId)) {
+    return 'building'
+  }
+
+  // 检查服务器是否在运行
+  const server = runningProcesses.get(projectId)
+  if (server && server.listening === true) {
+    return 'running'
+  }
+
+  // 检查配置文件中的失败状态（failed 状态需要保留，因为它不会自动恢复）
+  const projectConfig = new ProjectConfig(projectId)
+  const project = projectConfig.read()
+  if (project && project.status === 'failed') {
+    return 'failed'
+  }
+
+  return 'stopped'
+}
+
+/**
+ * Check if a project is actually running (based on runningProcesses Map, not stored status)
+ * @deprecated Use getProjectRealStatus instead
+ */
+export function isProjectRunning(projectId) {
+  const server = runningProcesses.get(projectId)
+  return server && server.listening === true
 }
 
 /**

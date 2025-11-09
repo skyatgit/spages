@@ -416,7 +416,7 @@ const addProject = async () => {
   try {
     const [owner, repo] = selectedRepo.value.fullName.split('/')
 
-    const project = await createProject({
+    const response = await createProject({
       name: projectName.value,
       accountId: selectedAccount.value,
       repository: selectedRepo.value.fullName,
@@ -426,13 +426,22 @@ const addProject = async () => {
       port: port.value
     })
 
-    // 自动触发部署
-    if (project && project.id) {
-      await deployProject(project.id)
-    }
+    console.log('Create project response:', response)
 
-    await modal.alert(t('addProject.projectAddedAndDeploying'))
-    router.push('/')
+    // 自动触发部署（不等待完成）
+    if (response && response.project && response.project.id) {
+      const projectId = response.project.id
+
+      deployProject(projectId).catch(err => {
+        console.error('Deployment failed:', err)
+      })
+
+      // 直接跳转到项目详情页
+      router.push(`/project/${projectId}`)
+    } else {
+      console.error('Invalid response structure:', response)
+      await modal.alert(t('addProject.createProjectFailed'))
+    }
   } catch (error) {
     console.error('Failed to create project:', error)
     await modal.alert(t('addProject.createProjectFailed'))

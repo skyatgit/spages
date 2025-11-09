@@ -140,7 +140,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
@@ -176,18 +176,31 @@ const loading = ref(true)
 const showDeleteProgress = ref(false)
 const deleteProgressModal = ref(null)
 
+// 定时器引用，用于清理
+let projectRefreshInterval = null
+let logsRefreshInterval = null
+let historyRefreshInterval = null
+
 // 页面加载时获取项目详情
 onMounted(async () => {
   await loadProject()
   await loadLogs()
   await loadDeploymentHistory()
   await loadEnvVars()
+
   // 自动刷新状态每5秒
-  setInterval(loadProject, 5000)
+  projectRefreshInterval = setInterval(loadProject, 5000)
   // 自动刷新日志每3秒
-  setInterval(loadLogs, 3000)
+  logsRefreshInterval = setInterval(loadLogs, 3000)
   // 刷新部署历史每10秒
-  setInterval(loadDeploymentHistory, 10000)
+  historyRefreshInterval = setInterval(loadDeploymentHistory, 10000)
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (projectRefreshInterval) clearInterval(projectRefreshInterval)
+  if (logsRefreshInterval) clearInterval(logsRefreshInterval)
+  if (historyRefreshInterval) clearInterval(historyRefreshInterval)
 })
 
 // 加载项目详情
@@ -200,6 +213,13 @@ const loadProject = async () => {
   } catch (error) {
     console.error('[ProjectDetail] Failed to load project:', error)
     console.error('[ProjectDetail] Error details:', error.response?.data || error.message)
+
+    // 清理所有定时器
+    if (projectRefreshInterval) clearInterval(projectRefreshInterval)
+    if (logsRefreshInterval) clearInterval(logsRefreshInterval)
+    if (historyRefreshInterval) clearInterval(historyRefreshInterval)
+
+    // 只在首次加载时显示错误并跳转
     if (loading.value) {
       await modal.alert(t('projectDetail.loadFailed'))
       router.push('/')
@@ -220,6 +240,10 @@ const loadLogs = async () => {
     }
   } catch (error) {
     console.error('Failed to load logs:', error)
+    // 如果项目不存在（404），停止定时器
+    if (error.response?.status === 404) {
+      if (logsRefreshInterval) clearInterval(logsRefreshInterval)
+    }
   }
 }
 
@@ -234,6 +258,10 @@ const loadDeploymentHistory = async () => {
     }
   } catch (error) {
     console.error('Failed to load deployment history:', error)
+    // 如果项目不存在（404），停止定时器
+    if (error.response?.status === 404) {
+      if (historyRefreshInterval) clearInterval(historyRefreshInterval)
+    }
   }
 }
 
