@@ -39,5 +39,7 @@ __screenshots__/
 data/
 runtime/
 dist-release/
+temp-build/
 projects/
 .env
+.runtime/
