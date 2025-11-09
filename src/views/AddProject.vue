@@ -178,7 +178,9 @@ onMounted(async () => {
 // 加载 GitHub 账号列表
 const loadGithubAccounts = async () => {
   try {
-    const accounts = await getGithubAccounts()
+    const response = await getGithubAccounts()
+    // 后端返回 { authorized: [], unauthorized: [] }
+    const accounts = response.authorized || []
     githubAccounts.value = accounts
     isGithubConnected.value = accounts.length > 0
 
