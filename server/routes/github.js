@@ -1,30 +1,353 @@
 import express from 'express'
 import axios from 'axios'
 import crypto from 'crypto'
-import { githubAccountsConfig } from '../utils/config.js'
+import jwt from 'jsonwebtoken'
+import { githubAccountsConfig, githubAppConfig } from '../utils/config.js'
 import { authMiddleware } from '../utils/auth.js'
 
 const router = express.Router()
 
-// Get the base URL from environment or use default
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
+// Get base URL dynamically from request (for proxy support)
+const getBaseUrl = (req) => {
+  // 如果设置了环境变量，使用环境变量
+  if (process.env.BASE_URL) {
+    return process.env.BASE_URL
+  }
 
-// Create GitHub App using Manifest Flow
+  // 强制使用前端地址，因为所有 API 都通过前端代理访问
+  // 前端会将请求代理到后端，所以回调地址必须是前端地址
+  return 'http://localhost:5173'
+}
+
+// Get shared GitHub App configuration status
+router.get('/app-config', authMiddleware, (req, res) => {
+  try {
+    const appConfig = githubAppConfig.read()
+
+    if (appConfig.configured && appConfig.appId) {
+      // Return app info without sensitive data
+      res.json({
+        configured: true,
+        appId: appConfig.appId,
+        slug: appConfig.slug,
+        htmlUrl: appConfig.htmlUrl,
+        createdAt: appConfig.createdAt
+      })
+    } else {
+      res.json({
+        configured: false
+      })
+    }
+  } catch (error) {
+    console.error('Error getting app config:', error)
+    res.status(500).json({ error: 'Failed to get app config' })
+  }
+})
+
+// Create shared GitHub App - GET version (for direct navigation)
+// Note: No authMiddleware here since it's accessed via browser redirect
+router.get('/setup-app', async (req, res) => {
+  try {
+    const appConfig = githubAppConfig.read()
+
+    // Check if already configured
+    if (appConfig.configured) {
+      const baseUrl = req.query.baseUrl || getBaseUrl(req)
+      return res.redirect(`${baseUrl}/#/settings?error=app_already_configured`)
+    }
+
+    // Get base URL from query parameter (passed from frontend)
+    let baseUrl = req.query.baseUrl || getBaseUrl(req)
+
+    // Ensure baseUrl is valid
+    if (!baseUrl || baseUrl === 'undefined' || baseUrl === 'null') {
+      baseUrl = 'http://localhost:5173' // Fallback to default
+    }
+
+    console.log('[GitHub App Setup GET] Query baseUrl:', req.query.baseUrl)
+    console.log('[GitHub App Setup GET] Fallback baseUrl:', getBaseUrl(req))
+    console.log('[GitHub App Setup GET] Final Base URL:', baseUrl)
+    console.log('[GitHub App Setup GET] Base URL type:', typeof baseUrl)
+    console.log('[GitHub App Setup GET] Base URL length:', baseUrl ? baseUrl.length : 0)
+    console.log('[GitHub App Setup GET] Request headers:', {
+      host: req.get('host'),
+      'x-forwarded-host': req.get('x-forwarded-host'),
+      'x-forwarded-proto': req.get('x-forwarded-proto'),
+      protocol: req.protocol
+    })
+
+    // Validate baseUrl before creating manifest
+    if (!baseUrl || typeof baseUrl !== 'string' || baseUrl.trim() === '') {
+      console.error('[GitHub App Setup GET] Invalid baseUrl, using default')
+      baseUrl = 'http://localhost:5173'
+    }
+
+    // Define the shared GitHub App manifest
+    // Note: No webhook URL - will be configured later on public server
+    // Add short timestamp and random suffix to avoid name conflicts
+    const shortTimestamp = Date.now().toString().slice(-8) // Last 8 digits
+    const randomSuffix = crypto.randomBytes(2).toString('hex') // 4 hex chars
+    const appName = `SPages-${shortTimestamp}${randomSuffix}`
+
+    console.log('[GitHub App Setup GET] Generated App Name:', appName)
+
+    const manifest = {
+      name: appName,
+      url: baseUrl,
+      redirect_url: `${baseUrl}/api/github/setup-callback`,
+      callback_urls: [`${baseUrl}/api/github/callback`],
+      setup_url: `${baseUrl}/api/github/callback`,
+      public: false,
+      default_permissions: {
+        contents: 'read',
+        metadata: 'read',
+        emails: 'read'
+      },
+      default_events: []
+    }
+
+    console.log('[GitHub App Setup GET] Manifest:', JSON.stringify(manifest, null, 2))
+    console.log('[GitHub App Setup GET] Manifest URL field:', manifest.url)
+    console.log('[GitHub App Setup GET] Note: Webhook not configured - configure later on public server')
+
+    // Store manifest temporarily (same pattern as create-app)
+    global.pendingSetupManifest = global.pendingSetupManifest || {}
+    const manifestId = Date.now().toString()
+    global.pendingSetupManifest[manifestId] = manifest
+
+    // Redirect to submit page (same pattern as before)
+    res.redirect(`/api/github/submit-setup-manifest?id=${manifestId}`)
+  } catch (error) {
+    console.error('Error creating app setup:', error)
+    const baseUrl = getBaseUrl(req)
+    res.redirect(`${baseUrl}/#/settings?error=setup_failed`)
+  }
+})
+
+// Create shared GitHub App - POST version (for API calls)
+router.post('/setup-app', authMiddleware, async (req, res) => {
+  try {
+    const appConfig = githubAppConfig.read()
+
+    // Check if already configured
+    if (appConfig.configured) {
+      return res.status(400).json({
+        error: 'GitHub App already configured',
+        appId: appConfig.appId
+      })
+    }
+
+    const baseUrl = getBaseUrl(req)
+    console.log('[GitHub App Setup POST] Base URL:', baseUrl)
+    console.log('[GitHub App Setup POST] Request headers:', {
+      host: req.get('host'),
+      'x-forwarded-host': req.get('x-forwarded-host'),
+      'x-forwarded-proto': req.get('x-forwarded-proto'),
+      protocol: req.protocol
+    })
+
+    // Define the shared GitHub App manifest
+    // Note: No webhook URL - will be configured later on public server
+    // Add short timestamp and random suffix to avoid name conflicts
+    const shortTimestamp = Date.now().toString().slice(-8) // Last 8 digits
+    const randomSuffix = crypto.randomBytes(2).toString('hex') // 4 hex chars
+    const appName = `SPages-${shortTimestamp}${randomSuffix}`
+
+    console.log('[GitHub App Setup POST] Generated App Name:', appName)
+
+    const manifest = {
+      name: appName,
+      url: baseUrl,
+      redirect_url: `${baseUrl}/api/github/setup-callback`,
+      callback_urls: [`${baseUrl}/api/github/callback`],
+      setup_url: `${baseUrl}/api/github/callback`,
+      public: false,
+      default_permissions: {
+        contents: 'read',
+        metadata: 'read',
+        emails: 'read'
+      },
+      default_events: []
+    }
+
+    console.log('[GitHub App Setup POST] Manifest:', JSON.stringify(manifest, null, 2))
+    console.log('[GitHub App Setup POST] Note: Webhook not configured - configure later on public server')
+
+    // Generate a state for this setup
+    const state = crypto.randomBytes(16).toString('hex')
+    const manifestJson = JSON.stringify(manifest)
+
+    // Return HTML that auto-submits the manifest to GitHub
+    const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <title>Creating GitHub App...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          }
+          .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+          }
+          h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+          }
+          p {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+          }
+          .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>🚀 Creating GitHub App...</h2>
+          <p>Please wait while we set up your GitHub App...</p>
+          <div class="spinner"></div>
+        </div>
+        <form id="manifest-form" method="POST" action="https://github.com/settings/apps/new?state=${state}">
+          <input type="hidden" name="manifest" id="manifest" value="">
+        </form>
+        <script>
+          document.getElementById('manifest').value = ${JSON.stringify(manifestJson)};
+          setTimeout(() => {
+            document.getElementById('manifest-form').submit();
+          }, 1000);
+        </script>
+      </body>
+      </html>
+    `
+
+    res.send(html)
+  } catch (error) {
+    console.error('Error creating app setup:', error)
+    res.status(500).json({ error: 'Failed to create app setup' })
+  }
+})
+
+// Handle setup callback (save shared App config)
+router.get('/setup-callback', async (req, res) => {
+  try {
+    const { code } = req.query
+
+    console.log('[Setup Callback] Received code:', code)
+    console.log('[Setup Callback] Full query:', req.query)
+
+    if (!code) {
+      // 无法从请求获取 baseUrl，使用默认值
+      const baseUrl = getBaseUrl(req)
+      console.error('[Setup Callback] No code provided, redirecting with error')
+      return res.redirect(`${baseUrl}/#/settings?error=no_code&tab=github`)
+    }
+
+    console.log('[Setup Callback] Exchanging code for App credentials...')
+
+    // Exchange code for App credentials
+    const response = await axios.post(
+      `https://api.github.com/app-manifests/${code}/conversions`,
+      {},
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      }
+    )
+
+    const appData = response.data
+
+    console.log('[Setup Callback] App created successfully!')
+    console.log('[Setup Callback] App ID:', appData.id)
+    console.log('[Setup Callback] App Slug:', appData.slug)
+    console.log('[Setup Callback] App external_url:', appData.external_url)
+
+    // Extract baseUrl from the callback_url that GitHub stored
+    // callback_url format: http://192.168.2.14:5173/api/github/callback
+    let baseUrl = getBaseUrl(req) // fallback
+    if (appData.external_url) {
+      // external_url 就是我们创建时提交的 url
+      baseUrl = appData.external_url
+    }
+
+    console.log('[Setup Callback] Using baseUrl:', baseUrl)
+
+    // Save as the shared App configuration
+    const appConfig = {
+      configured: true,
+      appId: appData.id,
+      clientId: appData.client_id,
+      clientSecret: appData.client_secret,
+      webhookSecret: appData.webhook_secret,
+      pem: appData.pem,
+      slug: appData.slug,
+      htmlUrl: appData.html_url,
+      baseUrl: baseUrl, // 保存 baseUrl 供后续使用
+      createdAt: new Date().toISOString()
+    }
+
+    console.log('[Setup Callback] Saving app config...')
+    githubAppConfig.write(appConfig)
+    console.log('[Setup Callback] App config saved successfully!')
+
+    console.log(`Shared GitHub App created: ${appData.slug}`)
+    console.log(`Base URL saved: ${baseUrl}`)
+
+    // Redirect to settings with success
+    console.log('[Setup Callback] Redirecting to:', `${baseUrl}/#/settings?success=app_configured&tab=github`)
+    res.redirect(`${baseUrl}/#/settings?success=app_configured&tab=github`)
+  } catch (error) {
+    console.error('Setup callback error:', error.response?.data || error.message)
+    const baseUrl = getBaseUrl(req)
+    res.redirect(`${baseUrl}/#/settings?error=setup_failed&tab=github`)
+  }
+})
+
+// Create GitHub App using Manifest Flow (deprecated - use setup-app instead)
 router.post('/create-app', authMiddleware, async (req, res) => {
   try {
+    const baseUrl = getBaseUrl(req)
+
     // Generate a unique code for this session
     const code = crypto.randomBytes(16).toString('hex')
 
     // Define the GitHub App manifest
+    // Note: No webhook URL - will be configured later on public server
+    // Add short timestamp and random suffix to avoid name conflicts
+    const shortTimestamp = Date.now().toString().slice(-8) // Last 8 digits
+    const randomSuffix = crypto.randomBytes(2).toString('hex') // 4 hex chars
+    const appName = `SPages-${shortTimestamp}${randomSuffix}`
+
     const manifest = {
-      name: `SPages-${Date.now()}`,
-      url: BASE_URL,
-      hook_attributes: {
-        active: false
-      },
-      redirect_url: `${BASE_URL}/api/github/manifest-callback`,
-      callback_urls: [`${BASE_URL}/api/github/callback`],
-      setup_url: `${BASE_URL}/api/github/callback`,
+      name: appName,
+      url: baseUrl,
+      redirect_url: `${baseUrl}/api/github/manifest-callback`,
+      callback_urls: [`${baseUrl}/api/github/callback`],
+      setup_url: `${baseUrl}/api/github/callback`,
       public: false,
       default_permissions: {
         contents: 'read',
@@ -52,9 +375,10 @@ router.post('/create-app', authMiddleware, async (req, res) => {
 router.get('/manifest-callback', async (req, res) => {
   try {
     const { code } = req.query
+    const baseUrl = getBaseUrl(req)
 
     if (!code) {
-      return res.redirect('/#/settings?error=no_code')
+      return res.redirect(`${baseUrl}/#/settings?error=no_code`)
     }
 
     // Exchange code for App credentials
@@ -96,48 +420,32 @@ router.get('/manifest-callback', async (req, res) => {
     res.redirect(installUrl)
   } catch (error) {
     console.error('Manifest callback error:', error.response?.data || error.message)
-    res.redirect('/#/settings?error=manifest_failed')
+    const baseUrl = getBaseUrl(req)
+    res.redirect(`${baseUrl}/#/settings?error=manifest_failed`)
   }
 })
 
-// Initiate GitHub App creation flow
+// Initiate GitHub App creation flow (deprecated - use setup-app instead)
+// Now used to install the shared App
 router.get('/create-app', authMiddleware, (req, res) => {
   try {
-    const appName = `SPages-${Date.now()}`
+    // Check if shared App is configured
+    const appConfig = githubAppConfig.read()
 
-    // Create manifest according to GitHub spec
-    // Use example.com for webhook URL since localhost won't work
-    const manifest = {
-      name: appName,
-      url: BASE_URL,
-      hook_attributes: {
-        url: "https://example.com/webhook",
-        active: false
-      },
-      redirect_url: `${BASE_URL}/api/github/manifest-callback`,
-      callback_urls: [`${BASE_URL}/api/github/callback`],
-      setup_url: `${BASE_URL}/api/github/callback`,
-      description: 'SPages - Self-hosted static site deployment platform',
-      public: false,
-      request_oauth_on_install: true,
-      default_permissions: {
-        contents: 'read',
-        metadata: 'read'
-      }
+    if (!appConfig.configured || !appConfig.appId) {
+      return res.status(400).json({
+        error: 'GitHub App not configured',
+        message: 'Please configure GitHub App in system settings first'
+      })
     }
 
-    // Store manifest temporarily (in a real app, use Redis or database with expiry)
-    global.pendingManifests = global.pendingManifests || {}
-    const manifestId = Date.now().toString()
-    global.pendingManifests[manifestId] = manifest
-
-    // Return URL that frontend will open
+    // Return installation URL for the shared App
     res.json({
-      url: `${BASE_URL}/api/github/submit-manifest?id=${manifestId}`
+      url: `${appConfig.htmlUrl}/installations/new`
     })
   } catch (error) {
-    console.error('Error creating app:', error)
-    res.status(500).json({ error: 'Failed to create app' })
+    console.error('Error getting app:', error)
+    res.status(500).json({ error: 'Failed to get app' })
   }
 })
 
@@ -153,24 +461,166 @@ router.get('/submit-manifest', (req, res) => {
   delete global.pendingManifests[id] // Clean up
 
   // Generate HTML form that auto-submits
-  // According to GitHub docs example
   const state = crypto.randomBytes(16).toString('hex')
   const manifestJson = JSON.stringify(manifest)
 
   const html = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
+      <meta charset="UTF-8">
       <title>Creating GitHub App...</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+          background: white;
+          padding: 40px;
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+          text-align: center;
+        }
+        h2 {
+          color: #2c3e50;
+          margin-bottom: 20px;
+        }
+        p {
+          color: #7f8c8d;
+          margin-bottom: 30px;
+        }
+        .spinner {
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #3498db;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
     </head>
     <body>
-      <h2>Redirecting to GitHub...</h2>
-      <p>Please wait while we create your GitHub App...</p>
+      <div class="container">
+        <h2>🚀 Creating GitHub App...</h2>
+        <p>Please wait while we create your GitHub App...</p>
+        <div class="spinner"></div>
+      </div>
       <form id="manifest-form" method="POST" action="https://github.com/settings/apps/new?state=${state}">
         <input type="text" name="manifest" id="manifest" style="display:none;">
       </form>
       <script>
         document.getElementById('manifest').value = ${JSON.stringify(manifestJson)};
+        document.getElementById('manifest-form').submit();
+      </script>
+    </body>
+    </html>
+  `
+
+  res.send(html)
+})
+
+// Submit setup manifest to GitHub (for shared App setup)
+router.get('/submit-setup-manifest', (req, res) => {
+  const { id } = req.query
+
+  console.log('[Submit Setup Manifest] Request ID:', id)
+
+  if (!id || !global.pendingSetupManifest || !global.pendingSetupManifest[id]) {
+    console.error('[Submit Setup Manifest] Invalid or expired manifest ID')
+    return res.status(400).send('Invalid or expired manifest ID')
+  }
+
+  const manifest = global.pendingSetupManifest[id]
+  delete global.pendingSetupManifest[id] // Clean up
+
+  console.log('[Submit Setup Manifest] Manifest:', JSON.stringify(manifest, null, 2))
+
+  // Validate manifest has required fields
+  if (!manifest.url || typeof manifest.url !== 'string' || manifest.url.trim() === '') {
+    console.error('[Submit Setup Manifest] Invalid manifest.url:', manifest.url)
+    return res.status(400).send('Invalid manifest: url field is missing or empty')
+  }
+
+  // Generate HTML form that auto-submits
+  const state = crypto.randomBytes(16).toString('hex')
+  const manifestJson = JSON.stringify(manifest)
+
+  console.log('[Submit Setup Manifest] State:', state)
+  console.log('[Submit Setup Manifest] Manifest JSON length:', manifestJson.length)
+  console.log('[Submit Setup Manifest] Manifest.url:', manifest.url)
+  console.log('[Submit Setup Manifest] Submitting to GitHub...')
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Creating GitHub App...</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100vh;
+          margin: 0;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+          background: white;
+          padding: 40px;
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+          text-align: center;
+        }
+        h2 {
+          color: #2c3e50;
+          margin-bottom: 20px;
+        }
+        p {
+          color: #7f8c8d;
+          margin-bottom: 30px;
+        }
+        .spinner {
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #3498db;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h2>🚀 Setting up GitHub App...</h2>
+        <p>Please wait while we create your shared GitHub App...</p>
+        <div class="spinner"></div>
+      </div>
+      <form id="manifest-form" method="POST" action="https://github.com/settings/apps/new?state=${state}">
+        <input type="text" name="manifest" id="manifest" style="display:none;">
+      </form>
+      <script>
+        // manifestJson is already a JSON string, don't stringify again
+        document.getElementById('manifest').value = ${JSON.stringify(manifestJson)};
+        console.log('Manifest length:', document.getElementById('manifest').value.length);
+        console.log('Manifest preview:', document.getElementById('manifest').value.substring(0, 200));
         document.getElementById('manifest-form').submit();
       </script>
     </body>
@@ -188,62 +638,65 @@ router.get('/install-url', authMiddleware, (req, res) => {
 
 // GitHub App installation callback
 router.get('/callback', async (req, res) => {
+  console.log('[Callback] Received request')
+  console.log('[Callback] Query params:', req.query)
+
   const { installation_id, setup_action } = req.query
+
+  // Get the shared App config first to get baseUrl
+  const appConfig = githubAppConfig.read()
+  const baseUrl = appConfig.baseUrl || getBaseUrl(req)
+
+  console.log('[Callback] App configured:', appConfig.configured)
+  console.log('[Callback] Using baseUrl:', baseUrl)
 
   // User completed app installation
   if (setup_action === 'install' && installation_id) {
+    console.log('[Callback] Processing app installation, installation_id:', installation_id)
+
     try {
-      // Find the app that was just installed
-      const accounts = githubAccountsConfig.read()
-
-      // Find app by checking if it matches the installation
-      // Since we don't have OAuth yet, we'll mark this installation for later
-      // The user needs to authorize the app to get their user info
-
-      // Get all app accounts and find the most recent one (just created)
-      const appAccounts = Object.values(accounts).filter(acc => acc.appId)
-      const latestApp = appAccounts.sort((a, b) =>
-        new Date(b.createdAt) - new Date(a.createdAt)
-      )[0]
-
-      if (!latestApp) {
-        return res.redirect('/#/settings?error=no_app')
+      if (!appConfig.configured) {
+        console.error('[Callback] App not configured!')
+        return res.redirect(`${baseUrl}/#/settings?error=no_app`)
       }
 
+      console.log('[Callback] Redirecting to OAuth authorization...')
       // Now redirect to OAuth authorization to get user token
-      const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${latestApp.clientId}&state=${installation_id}`
+      const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${appConfig.clientId}&state=${installation_id}`
+      console.log('[Callback] OAuth URL:', oauthUrl)
       return res.redirect(oauthUrl)
     } catch (error) {
       console.error('Installation callback error:', error)
-      return res.redirect('/#/settings?error=install_failed')
+      return res.redirect(`${baseUrl}/#/settings?error=install_failed`)
     }
   }
 
   // OAuth callback with code
   const { code, state } = req.query
 
+  console.log('[Callback] OAuth callback, code:', code ? 'present' : 'missing')
+  console.log('[Callback] State (installation_id):', state)
+
   if (!code) {
-    return res.redirect('/#/settings?error=no_code')
+    console.error('[Callback] No code provided!')
+    return res.redirect(`${baseUrl}/#/settings?error=no_code`)
   }
 
   try {
-    // Find the app by installation_id (passed as state)
-    const accounts = githubAccountsConfig.read()
-    const appAccounts = Object.values(accounts).filter(acc => acc.appId)
-    const latestApp = appAccounts.sort((a, b) =>
-      new Date(b.createdAt) - new Date(a.createdAt)
-    )[0]
 
-    if (!latestApp) {
-      return res.redirect('/#/settings?error=no_app')
+    if (!appConfig.configured) {
+      console.error('[Callback] App not configured!')
+      return res.redirect(`${baseUrl}/#/settings?error=no_app`)
     }
+
+    console.log('[Callback] Exchanging code for access token...')
 
     // Exchange code for user access token
     const tokenResponse = await axios.post(
       'https://github.com/login/oauth/access_token',
       {
-        client_id: latestApp.clientId,
-        client_secret: latestApp.clientSecret,
+        client_id: appConfig.clientId,
+        client_secret: appConfig.clientSecret,
         code
       },
       {
@@ -256,7 +709,7 @@ router.get('/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token
 
     if (!accessToken) {
-      return res.redirect('/#/settings?error=no_token')
+      return res.redirect(`${baseUrl}/#/settings?error=no_token`)
     }
 
     // Get user info
@@ -287,46 +740,67 @@ router.get('/callback', async (req, res) => {
       console.log('Could not fetch emails:', e.message)
     }
 
-    // Update the app account with user info
-    const userAccountId = `gh_${user.id}_${latestApp.appId}`
-    accounts[userAccountId] = {
-      id: userAccountId,
+    // Save installation record (not in app config, but in accounts)
+    const accounts = githubAccountsConfig.read()
+    const installationId = `installation_${user.id}`
+
+    accounts[installationId] = {
+      id: installationId,
+      appId: appConfig.appId,
+      appSlug: appConfig.slug,
       githubId: user.id,
       username: user.login,
       email: primaryEmail,
       avatar: user.avatar_url,
       accessToken,
-      appId: latestApp.appId,
-      appSlug: latestApp.slug,
       installationId: state, // installation_id from state
       connectedAt: new Date().toISOString()
     }
 
     githubAccountsConfig.write(accounts)
 
-    res.redirect('/#/settings?success=github_connected')
+    console.log(`User ${user.login} connected to shared App`)
+
+    res.redirect(`${baseUrl}/#/settings?success=github_connected`)
   } catch (error) {
     console.error('OAuth callback error:', error.response?.data || error.message)
-    res.redirect('/#/settings?error=auth_failed')
+    res.redirect(`${baseUrl}/#/settings?error=auth_failed`)
   }
 })
 
-// Get all connected GitHub accounts (filter out app configs, only return user accounts)
+// Get all connected GitHub accounts
 router.get('/accounts', authMiddleware, (req, res) => {
   try {
     const accounts = githubAccountsConfig.read()
-    // Filter to only include user accounts (those with username), not app configs
-    const accountList = Object.values(accounts)
-      .filter(acc => acc.username) // Only user accounts have username
-      .map(acc => ({
-        id: acc.id,
-        username: acc.username,
-        email: acc.email,
-        avatar: acc.avatar,
-        connectedAt: acc.connectedAt
-      }))
 
-    res.json(accountList)
+    const installations = []
+
+    // Iterate through all installation records
+    Object.values(accounts).forEach(account => {
+      if (account.username && account.installationId) {
+        // This is an installation record
+        installations.push({
+          id: account.id,
+          appId: account.appId,
+          appSlug: account.appSlug,
+          githubId: account.githubId,
+          username: account.username,
+          email: account.email,
+          avatar: account.avatar,
+          accessToken: account.accessToken,
+          installationId: account.installationId,
+          connectedAt: account.connectedAt
+        })
+      }
+    })
+
+    // Sort by connected time
+    installations.sort((a, b) => new Date(b.connectedAt) - new Date(a.connectedAt))
+
+    res.json({
+      authorized: installations,
+      unauthorized: [] // No more orphaned apps
+    })
   } catch (error) {
     console.error('Error fetching accounts:', error)
     res.status(500).json({ error: 'Failed to fetch accounts' })
@@ -387,23 +861,112 @@ router.post('/accounts/:id/refresh', authMiddleware, async (req, res) => {
   }
 })
 
-// Remove account
-router.delete('/accounts/:id', authMiddleware, (req, res) => {
+// Remove account (delete installation)
+router.delete('/accounts/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
+    const { deleteFromGitHub } = req.query
     const accounts = githubAccountsConfig.read()
 
     if (!accounts[id]) {
       return res.status(404).json({ error: 'Account not found' })
     }
 
+    const account = accounts[id]
+    const results = {
+      localDeleted: false,
+      installationDeleted: false,
+      appDeleteUrl: null,
+      errors: []
+    }
+
+    // If requested, delete from GitHub
+    if (deleteFromGitHub === 'true' && account.installationId) {
+      // Get shared App config for JWT generation
+      const appConfig = githubAppConfig.read()
+
+      if (appConfig.configured && appConfig.pem) {
+        try {
+          const now = Math.floor(Date.now() / 1000)
+          const payload = {
+            iat: now - 60,
+            exp: now + (10 * 60),
+            iss: appConfig.appId
+          }
+          const appToken = jwt.sign(payload, appConfig.pem, { algorithm: 'RS256' })
+
+          // Delete the installation
+          await axios.delete(
+            `https://api.github.com/app/installations/${account.installationId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${appToken}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
+              }
+            }
+          )
+          results.installationDeleted = true
+          console.log(`Deleted installation ${account.installationId} from GitHub`)
+        } catch (error) {
+          console.error('Failed to delete installation:', error.response?.data || error.message)
+          results.errors.push(`Installation deletion failed: ${error.response?.data?.message || error.message}`)
+        }
+      }
+    }
+
+    // Delete local installation record
     delete accounts[id]
     githubAccountsConfig.write(accounts)
+    results.localDeleted = true
 
-    res.json({ success: true })
+    console.log(`Deleted installation for user: ${account.username}`)
+
+    res.json({
+      success: true,
+      message: 'Installation deleted',
+      results
+    })
   } catch (error) {
     console.error('Error removing account:', error)
     res.status(500).json({ error: 'Failed to remove account' })
+  }
+})
+
+// Remove user endpoint is no longer needed since we don't group by user
+// But keep it for compatibility (it will just delete the app)
+router.delete('/users/:githubId', authMiddleware, (req, res) => {
+  try {
+    const { githubId } = req.params
+    const accounts = githubAccountsConfig.read()
+
+    const githubIdNum = parseInt(githubId)
+    let deletedCount = 0
+
+    // Find all apps for this user
+    const toDelete = []
+    Object.entries(accounts).forEach(([key, app]) => {
+      if (app.githubId === githubIdNum) {
+        toDelete.push(key)
+      }
+    })
+
+    // Delete all marked items
+    toDelete.forEach(key => {
+      delete accounts[key]
+      deletedCount++
+    })
+
+    githubAccountsConfig.write(accounts)
+
+    res.json({
+      success: true,
+      message: `Deleted ${deletedCount} apps`,
+      deletedCount
+    })
+  } catch (error) {
+    console.error('Error removing user:', error)
+    res.status(500).json({ error: 'Failed to remove user' })
   }
 })
 

@@ -85,8 +85,12 @@ SPages/
 - GET /api/health — 健康检查
 
 GitHub App / OAuth 注意事项
-- GitHub App 的创建与安装流程依赖一个可以被 GitHub 回调访问的 BASE_URL（默认 `http://localhost:3000`）。在本地调试时，若需要完成安装/回调流程，请使用像 ngrok 之类的隧道工具将本地端口暴露到公网，然后将 BASE_URL 设置为你的公网地址。
-- 当前代码在创建 manifest 时会使用短期全局存储（例如 `global.pendingManifests`）做临时保存，这在生产环境中应替换为 Redis 或数据库并加上过期策略来提高安全性与可靠性。
+- **App 命名规则**：系统创建 GitHub App 时会自动添加短时间戳和随机字符后缀（格式：`SPages-{8位时间戳}{4位随机}`，如 `SPages-12063817a3f5`，总长度约 19 个字符），以避免与已存在的 App 名称冲突。
+- **本地开发环境**：系统创建 GitHub App 时不会配置 Webhook URL，这是正常的。Webhook 功能需要 GitHub 能够访问到您的服务器，因此仅适用于公网部署环境。
+- **公网部署配置 Webhook**：当您将应用部署到公网服务器后，可以手动在 GitHub App 设置中添加 Webhook URL（格式：`https://your-domain.com/api/github/webhook`）。详见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
+- **回调地址配置**：系统会根据您访问前端时使用的 URL 自动配置 GitHub App 的回调地址。例如，如果您通过 `http://192.168.2.14:5173` 访问，回调地址会自动设置为该地址。
+- **本地测试 OAuth 流程**：在本地开发时，如需完整测试 GitHub App 授权流程，建议使用 ngrok 等内网穿透工具将本地端口暴露到公网，然后通过公网地址访问并创建 GitHub App。
+- **临时数据存储**：当前代码在创建 manifest 时会使用短期全局存储（例如 `global.pendingManifests`）做临时保存，这在生产环境中应替换为 Redis 或数据库并加上过期策略来提高安全性与可靠性。
 
 安全提醒
 - 请不要在公共仓库中提交 `data/` 目录下的文件或其他凭证

@@ -1,7 +1,6 @@
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
-import os from 'os'
 import { fileURLToPath } from 'url'
 import { initApp } from './utils/init.js'
 import authRoutes from './routes/auth.js'
@@ -14,7 +13,7 @@ import { projectIndex } from './services/project-manager.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3000
-const HOST = process.env.HOST || '0.0.0.0' // Listen on all network interfaces
+const HOST = process.env.HOST || 'localhost' // 只监听 localhost，不暴露到外网
 
 // Initialize application
 await initApp()
@@ -48,23 +47,6 @@ if (process.env.NODE_ENV === 'production') {
 
 app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`)
-
-  // Display all network interfaces
-  const interfaces = os.networkInterfaces()
-  const addresses = []
-
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        addresses.push(iface.address)
-      }
-    }
-  }
-
-  if (addresses.length > 0) {
-    console.log('\nAccess URLs:')
-    addresses.forEach(addr => {
-      console.log(`  http://${addr}:${PORT}`)
-    })
-  }
+  console.log('Backend is only accessible via localhost (not exposed to internet)')
+  console.log('Access via frontend proxy: http://localhost:5173')
 })

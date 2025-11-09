@@ -71,7 +71,41 @@
             {{ $t('settings.githubDesc') }}
           </p>
 
+          <!-- GitHub App Configuration -->
+          <div class="github-app-config">
+            <h3>{{ $t('settings.githubAppConfig') }}</h3>
+            <div v-if="!githubAppConfigured" class="app-not-configured">
+              <p class="warning-text">⚠️ {{ $t('settings.appNotConfigured') }}</p>
+              <p class="help-text">{{ $t('settings.appNotConfiguredDesc') }}</p>
+              <button class="btn btn-primary" @click="handleSetupGithubApp">
+                ⚙️ {{ $t('settings.setupApp') }}
+              </button>
+            </div>
+            <div v-else class="app-configured">
+              <p class="success-text">✅ {{ $t('settings.appConfigured') }}</p>
+              <div class="app-info-box">
+                <div class="info-item">
+                  <span class="label">{{ $t('settings.appName') }}:</span>
+                  <span class="value">{{ githubAppInfo.slug }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">{{ $t('settings.appId') }}:</span>
+                  <span class="value">{{ githubAppInfo.appId }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">{{ $t('settings.createdAt') }}:</span>
+                  <span class="value">{{ formatDate(githubAppInfo.createdAt) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="separator"></div>
+
+          <!-- User Accounts List -->
+          <h3>{{ $t('settings.connectedAccounts') }}</h3>
           <div class="github-accounts-list">
+            <!-- Authorized Apps -->
             <div
               v-for="account in githubAccounts"
               :key="account.id"
@@ -84,24 +118,66 @@
                 </div>
                 <div class="account-details">
                   <div class="account-username">{{ account.username }}</div>
-                  <div class="account-email">{{ account.email }}</div>
+                  <div class="account-email" v-if="account.email">{{ account.email }}</div>
+                  <div class="account-app">
+                    <span class="app-label">App:</span>
+                    <span class="app-slug">{{ account.appSlug }}</span>
+                  </div>
                   <div class="account-meta">
                     {{ $t('settings.connectedOn') }} {{ formatDate(account.connectedAt) }}
                   </div>
                 </div>
               </div>
               <div class="account-actions">
-                <button class="btn-icon" @click="refreshAccount(account.id)" :title="$t('common.refresh')">
-                  🔄
-                </button>
-                <button class="btn-icon" @click="removeAccount(account.id)" :title="$t('common.delete')">
+                <button
+                  class="btn-icon"
+                  @click="removeApp(account.id, account.username, account.appSlug)"
+                  :title="$t('common.delete')"
+                >
                   🗑️
                 </button>
               </div>
             </div>
 
-            <div v-if="githubAccounts.length === 0" class="no-accounts">
+            <div v-if="githubAccounts.length === 0 && orphanedApps.length === 0" class="no-accounts">
               <p>{{ $t('settings.noAccounts') }}</p>
+            </div>
+
+            <!-- Orphaned Apps (Apps without user accounts) -->
+            <div v-if="orphanedApps.length > 0" class="orphaned-apps-section">
+              <h3 class="orphaned-apps-title">{{ $t('settings.orphanedApps') }}</h3>
+              <p class="orphaned-apps-desc">{{ $t('settings.orphanedAppsDesc') }}</p>
+              <div
+                v-for="app in orphanedApps"
+                :key="app.id"
+                class="orphaned-app-item"
+              >
+                <div class="app-info-full">
+                  <div class="app-avatar">
+                    <img v-if="app.ownerAvatar" :src="app.ownerAvatar" :alt="app.ownerLogin" />
+                    <span v-else class="avatar-placeholder">{{ app.ownerLogin[0].toUpperCase() }}</span>
+                  </div>
+                  <div class="app-details">
+                    <div class="app-name">{{ app.appSlug }}</div>
+                    <div class="app-owner">{{ $t('settings.appOwner') }}: {{ app.ownerLogin }}</div>
+                    <div class="app-meta">
+                      {{ $t('settings.createdOn') }} {{ formatDate(app.createdAt) }}
+                    </div>
+                    <div class="app-status">
+                      <span class="status-badge status-incomplete">{{ $t('settings.notAuthorized') }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="app-actions">
+                  <button
+                    class="btn-icon"
+                    @click="removeOrphanedApp(app.id, app.appSlug)"
+                    :title="$t('common.delete')"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -181,7 +257,7 @@ import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { useToast } from '@/utils/toast'
-import { getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount } from '@/api/github'
+import { getGithubAppConfig, setupGithubApp, getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount, removeGithubUser } from '@/api/github'
 import { getSystemInfo, getStorageInfo, clearCache as clearCacheAPI, clearLogs as clearLogsAPI } from '@/api/system'
 import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
 
@@ -197,8 +273,11 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 
 // GitHub Accounts
-const githubAccounts = ref([])
+const githubAccounts = ref([]) // Authorized Apps
+const orphanedApps = ref([]) // Unauthorized Apps
 const loadingAccounts = ref(false)
+const githubAppConfigured = ref(false)
+const githubAppInfo = ref({})
 
 // Storage Data
 const storageData = ref({
@@ -304,12 +383,59 @@ const updateCredentials = async () => {
   }
 }
 
+// Load GitHub App configuration
+const loadGithubAppConfig = async () => {
+  try {
+    const config = await getGithubAppConfig()
+    githubAppConfigured.value = config.configured || false
+    if (config.configured) {
+      githubAppInfo.value = config
+    }
+  } catch (error) {
+    console.error('Failed to load GitHub App config:', error)
+    githubAppConfigured.value = false
+  }
+}
+
+// Setup GitHub App (one-time configuration)
+const handleSetupGithubApp = async () => {
+  try {
+    // Check if already configured first
+    const appConfig = await getGithubAppConfig()
+    if (appConfig.configured) {
+      await modal.alert(t('settings.appAlreadyConfigured'))
+      return
+    }
+
+    // Get current base URL (protocol + host)
+    const baseUrl = `${window.location.protocol}//${window.location.host}`
+
+    console.log('[Frontend] window.location.protocol:', window.location.protocol)
+    console.log('[Frontend] window.location.host:', window.location.host)
+    console.log('[Frontend] Base URL:', baseUrl)
+    console.log('[Frontend] Encoded Base URL:', encodeURIComponent(baseUrl))
+
+    // Open GitHub App creation page in a new tab with base URL parameter
+    const setupUrl = `/api/github/setup-app?baseUrl=${encodeURIComponent(baseUrl)}`
+    console.log('[Frontend] Opening URL:', setupUrl)
+
+    window.open(setupUrl, '_blank')
+
+    // Remind user to refresh after setup
+    await modal.alert(t('settings.appSetupInNewTab'))
+  } catch (error) {
+    console.error('Failed to setup GitHub App:', error)
+    await modal.alert(t('settings.appSetupFailed'))
+  }
+}
+
 // Load GitHub accounts
 const loadGithubAccounts = async () => {
   try {
     loadingAccounts.value = true
-    const accounts = await getGithubAccounts()
-    githubAccounts.value = accounts
+    const data = await getGithubAccounts()
+    githubAccounts.value = data.authorized || []
+    orphanedApps.value = data.unauthorized || []
   } catch (error) {
     console.error('Failed to load GitHub accounts:', error)
   } finally {
@@ -337,9 +463,15 @@ const loadStorageInfo = async () => {
   }
 }
 
-// Add GitHub account via GitHub App creation
+// Add GitHub account via GitHub App installation
 const addGithubAccount = async () => {
   try {
+    // Check if GitHub App is configured
+    if (!githubAppConfigured.value) {
+      await modal.alert(t('settings.mustConfigureAppFirst'))
+      return
+    }
+
     const { url } = await getGithubInstallUrl()
 
     if (!url) {
@@ -347,12 +479,12 @@ const addGithubAccount = async () => {
       return
     }
 
-    // Open the manifest submission page in new tab
+    // Open the installation page in new tab
     window.open(url, '_blank')
   } catch (error) {
-    console.error('Failed to create GitHub App:', error)
-    if (error.response && error.response.status === 500) {
-      await modal.alert(t('settings.githubNotConfigured'))
+    console.error('Failed to get install URL:', error)
+    if (error.response?.status === 400) {
+      await modal.alert(t('settings.mustConfigureAppFirst'))
     } else {
       await modal.alert(t('settings.githubAuthFailed'))
     }
@@ -374,33 +506,94 @@ const refreshAccount = async (id) => {
   }
 }
 
-// Remove GitHub account
-const removeAccount = async (id) => {
-  const confirmed = await modal.confirm(t('settings.removeAccountConfirm'))
+// Remove an App connection
+const removeApp = async (appId, username, appSlug) => {
+  const confirmed = await modal.confirm(t('settings.removeAppConfirm', { username, appSlug }))
   if (confirmed) {
+    // Ask if user wants to delete from GitHub too
+    const deleteFromGitHub = await modal.confirm(t('settings.deleteFromGitHubConfirm'))
+
     try {
-      await removeGithubAccount(id)
-      const index = githubAccounts.value.findIndex(a => a.id === id)
-      if (index !== -1) {
-        githubAccounts.value.splice(index, 1)
+      const response = await removeGithubAccount(appId, deleteFromGitHub)
+      await loadGithubAccounts()
+
+      // Show detailed result
+      if (deleteFromGitHub && response.results) {
+        const { installationDeleted, appDeleteUrl, errors } = response.results
+        if (installationDeleted && appDeleteUrl) {
+          // Installation deleted, but App needs manual deletion
+          const confirmManualDelete = await modal.confirm(
+            t('settings.installationDeletedManual', { url: appDeleteUrl })
+          )
+          if (confirmManualDelete) {
+            window.open(appDeleteUrl, '_blank')
+          }
+        } else if (installationDeleted) {
+          toast.success(t('settings.installationRemoved'))
+        } else if (errors && errors.length > 0) {
+          toast.error(t('settings.appRemovedLocalOnly') + ': ' + errors.join(', '))
+        }
+      } else {
+        toast.success(t('settings.appRemoved'))
       }
     } catch (error) {
-      console.error('Failed to remove account:', error)
-      await modal.alert(t('settings.accountRemoveFailed'))
+      console.error('Failed to remove app:', error)
+      await modal.alert(t('settings.appRemoveFailed'))
+    }
+  }
+}
+
+// Remove orphaned App (App without user account)
+const removeOrphanedApp = async (appId, appSlug) => {
+  const confirmed = await modal.confirm(t('settings.removeOrphanedAppConfirm', { appSlug }))
+  if (confirmed) {
+    // Ask if user wants to delete from GitHub too
+    const deleteFromGitHub = await modal.confirm(t('settings.deleteFromGitHubConfirm'))
+
+    try {
+      const response = await removeGithubAccount(appId, deleteFromGitHub)
+      await loadGithubAccounts()
+
+      // Show detailed result
+      if (deleteFromGitHub && response.results) {
+        const { appDeleteUrl, errors } = response.results
+        if (appDeleteUrl) {
+          // App needs manual deletion
+          const confirmManualDelete = await modal.confirm(
+            t('settings.appDeleteManual', { url: appDeleteUrl })
+          )
+          if (confirmManualDelete) {
+            window.open(appDeleteUrl, '_blank')
+          }
+        } else if (errors && errors.length > 0) {
+          toast.error(t('settings.appRemovedLocalOnly') + ': ' + errors.join(', '))
+        } else {
+          toast.success(t('settings.orphanedAppRemoved'))
+        }
+      } else {
+        toast.success(t('settings.orphanedAppRemoved'))
+      }
+    } catch (error) {
+      console.error('Failed to remove orphaned app:', error)
+      await modal.alert(t('settings.appRemoveFailed'))
     }
   }
 }
 
 // Check for OAuth callback
 onMounted(async () => {
+  await loadGithubAppConfig() // Load GitHub App configuration first
   await loadGithubAccounts()
   await loadSystemInfo()
   await loadStorageInfo()
 
-  // Check if coming from OAuth callback
+  // Check if coming from OAuth callback or App setup
   if (route.query.success === 'github_connected') {
     await modal.alert(t('settings.githubConnected'))
     await loadGithubAccounts()
+  } else if (route.query.success === 'app_configured') {
+    await modal.alert(t('settings.appConfigured'))
+    await loadGithubAppConfig()
   } else if (route.query.error) {
     const errorKey = `settings.githubError_${route.query.error}`
     await modal.alert(t(errorKey, t('settings.githubAuthFailed')))
@@ -629,12 +822,78 @@ const formatDate = (date) => {
 .account-email {
   font-size: 13px;
   color: #7f8c8d;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+}
+
+.account-app {
+  font-size: 13px;
+  color: #7f8c8d;
+  margin-bottom: 4px;
+}
+
+.app-label {
+  font-weight: 600;
+  margin-right: 5px;
+}
+
+.app-slug {
+  font-family: monospace;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .account-meta {
   font-size: 12px;
   color: #95a5a6;
+  margin-bottom: 8px;
+}
+
+.apps-list {
+  margin-top: 12px;
+  padding-left: 10px;
+  border-left: 3px solid #ecf0f1;
+}
+
+.app-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  transition: background 0.2s ease;
+}
+
+.app-item:hover {
+  background: #e9ecef;
+}
+
+.app-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-slug {
+  font-size: 13px;
+  color: #495057;
+  font-family: monospace;
+}
+
+.app-date {
+  font-size: 11px;
+  color: #95a5a6;
+}
+
+.btn-delete-app {
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.btn-delete-app:hover {
+  opacity: 1;
 }
 
 .account-actions {
@@ -642,10 +901,196 @@ const formatDate = (date) => {
   gap: 8px;
 }
 
+/* GitHub App Configuration Styles */
+.github-app-config {
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+}
+
+.github-app-config h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 15px;
+}
+
+.app-not-configured {
+  padding: 20px;
+  background: #fff3cd;
+  border: 2px solid #ffc107;
+  border-radius: 8px;
+}
+
+.app-configured {
+  padding: 20px;
+  background: #d4edda;
+  border: 2px solid #28a745;
+  border-radius: 8px;
+}
+
+.warning-text {
+  color: #856404;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.success-text {
+  color: #155724;
+  font-weight: 600;
+  margin-bottom: 15px;
+}
+
+.help-text {
+  color: #856404;
+  font-size: 14px;
+  margin-bottom: 15px;
+  line-height: 1.5;
+}
+
+.app-info-box {
+  background: white;
+  padding: 15px;
+  border-radius: 6px;
+  margin-top: 10px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-item .label {
+  font-weight: 600;
+  color: #495057;
+}
+
+.info-item .value {
+  color: #6c757d;
+  font-family: monospace;
+}
+
+.separator {
+  height: 1px;
+  background: #ecf0f1;
+  margin: 30px 0 20px 0;
+}
+
 .no-accounts {
   text-align: center;
   padding: 40px;
   color: #7f8c8d;
+}
+
+.orphaned-apps-section {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 2px solid #ecf0f1;
+}
+
+.orphaned-apps-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e67e22;
+  margin-bottom: 8px;
+}
+
+.orphaned-apps-desc {
+  font-size: 13px;
+  color: #95a5a6;
+  margin-bottom: 15px;
+}
+
+.orphaned-app-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 2px dashed #f39c12;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: #fef5e7;
+  transition: border-color 0.3s ease;
+}
+
+.orphaned-app-item:hover {
+  border-color: #e67e22;
+}
+
+.app-info-full {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.app-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #ecf0f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-details {
+  flex: 1;
+}
+
+.app-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+
+.app-owner {
+  font-size: 13px;
+  color: #7f8c8d;
+  margin-bottom: 2px;
+}
+
+.app-meta {
+  font-size: 12px;
+  color: #95a5a6;
+  margin-bottom: 6px;
+}
+
+.app-status {
+  margin-top: 6px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-incomplete {
+  background: #ffe5cc;
+  color: #e67e22;
+}
+
+.app-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .storage-info {

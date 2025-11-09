@@ -1,5 +1,15 @@
 import apiClient from './index'
 
+// Get shared GitHub App configuration status
+export const getGithubAppConfig = async () => {
+  return apiClient.get('/github/app-config')
+}
+
+// Setup shared GitHub App (one-time)
+export const setupGithubApp = async () => {
+  return apiClient.post('/github/setup-app')
+}
+
 // Get GitHub App creation URL
 export const getGithubInstallUrl = async () => {
   return apiClient.get('/github/create-app')
@@ -16,8 +26,14 @@ export const refreshGithubAccount = async (accountId) => {
 }
 
 // Remove GitHub account
-export const removeGithubAccount = async (accountId) => {
-  return apiClient.delete(`/github/accounts/${accountId}`)
+export const removeGithubAccount = async (accountId, deleteFromGitHub = false) => {
+  const params = deleteFromGitHub ? '?deleteFromGitHub=true' : ''
+  return apiClient.delete(`/github/accounts/${accountId}${params}`)
+}
+
+// Remove entire user (all apps)
+export const removeGithubUser = async (githubId) => {
+  return apiClient.delete(`/github/users/${githubId}`)
 }
 
 // Get repositories for an account
