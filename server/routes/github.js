@@ -81,8 +81,32 @@ const getBaseUrl = (req) => {
     return process.env.BASE_URL
   }
 
-  // 强制使用前端地址，因为所有 API 都通过前端代理访问
-  // 前端会将请求代理到后端，所以回调地址必须是前端地址
+  // 尝试从 Referer 头获取前端地址
+  const referer = req.get('referer') || req.get('origin')
+  if (referer) {
+    try {
+      const url = new URL(referer)
+      return `${url.protocol}//${url.host}`
+    } catch (e) {
+      // Referer 解析失败，继续使用默认值
+    }
+  }
+
+  // 尝试从 Host 头获取（如果是通过代理访问）
+  const host = req.get('x-forwarded-host') || req.get('host')
+  const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http')
+
+  if (host && host !== 'localhost:3000') {
+    // 如果 host 是前端地址（5173端口），直接使用
+    if (host.includes(':5173')) {
+      return `${protocol}://${host}`
+    }
+    // 如果是其他端口，可能是通过代理访问，尝试返回前端地址
+    const hostWithoutPort = host.split(':')[0]
+    return `${protocol}://${hostWithoutPort}:5173`
+  }
+
+  // 默认返回 localhost
   return 'http://localhost:5173'
 }
 
@@ -212,7 +236,7 @@ router.get('/setup-app', async (req, res) => {
     // Check if already configured
     if (appConfig.configured) {
       const baseUrl = req.query.baseUrl || getBaseUrl(req)
-      return res.redirect(`${baseUrl}/#/settings?error=app_already_configured`)
+      return res.redirect(`${baseUrl}#/settings?error=app_already_configured`)
     }
 
     // Get base URL from query parameter (passed from frontend)
@@ -278,7 +302,7 @@ router.get('/setup-app', async (req, res) => {
   } catch (error) {
     console.error('Error creating app setup:', error)
     const baseUrl = getBaseUrl(req)
-    res.redirect(`${baseUrl}/#/settings?error=setup_failed`)
+    res.redirect(`${baseUrl}#/settings?error=setup_failed`)
   }
 })
 
@@ -419,7 +443,7 @@ router.get('/setup-callback', async (req, res) => {
       // 无法从请求获取 baseUrl，使用默认值
       const baseUrl = getBaseUrl(req)
       console.error('[Setup Callback] No code provided, redirecting with error')
-      return res.redirect(`${baseUrl}/#/settings?error=no_code&tab=github`)
+      return res.redirect(`${baseUrl}/settings?error=no_code`)
     }
 
     console.log('[Setup Callback] Exchanging code for App credentials...')
@@ -475,12 +499,12 @@ router.get('/setup-callback', async (req, res) => {
     console.log(`Base URL saved: ${baseUrl}`)
 
     // Redirect to settings with success
-    console.log('[Setup Callback] Redirecting to:', `${baseUrl}/#/settings?success=app_configured&tab=github`)
-    res.redirect(`${baseUrl}/#/settings?success=app_configured&tab=github`)
+    console.log('[Setup Callback] Redirecting to:', `${baseUrl}/settings?success=app_configured`)
+    res.redirect(`${baseUrl}/settings?success=app_configured`)
   } catch (error) {
     console.error('Setup callback error:', error.response?.data || error.message)
     const baseUrl = getBaseUrl(req)
-    res.redirect(`${baseUrl}/#/settings?error=setup_failed&tab=github`)
+    res.redirect(`${baseUrl}/settings?error=setup_failed`)
   }
 })
 
@@ -534,7 +558,7 @@ router.get('/manifest-callback', async (req, res) => {
     const baseUrl = getBaseUrl(req)
 
     if (!code) {
-      return res.redirect(`${baseUrl}/#/settings?error=no_code`)
+      return res.redirect(`${baseUrl}/settings?error=no_code`)
     }
 
     // Exchange code for App credentials
@@ -577,7 +601,7 @@ router.get('/manifest-callback', async (req, res) => {
   } catch (error) {
     console.error('Manifest callback error:', error.response?.data || error.message)
     const baseUrl = getBaseUrl(req)
-    res.redirect(`${baseUrl}/#/settings?error=manifest_failed`)
+    res.redirect(`${baseUrl}/settings?error=manifest_failed`)
   }
 })
 
@@ -813,7 +837,7 @@ router.get('/callback', async (req, res) => {
     try {
       if (!appConfig.configured) {
         console.error('[Callback] App not configured!')
-        return res.redirect(`${baseUrl}/#/settings?error=no_app`)
+        return res.redirect(`${baseUrl}/settings?error=no_app`)
       }
 
       console.log('[Callback] Redirecting to OAuth authorization...')
@@ -823,7 +847,7 @@ router.get('/callback', async (req, res) => {
       return res.redirect(oauthUrl)
     } catch (error) {
       console.error('Installation callback error:', error)
-      return res.redirect(`${baseUrl}/#/settings?error=install_failed`)
+      return res.redirect(`${baseUrl}/settings?error=install_failed`)
     }
   }
 
@@ -835,14 +859,14 @@ router.get('/callback', async (req, res) => {
 
   if (!code) {
     console.error('[Callback] No code provided!')
-    return res.redirect(`${baseUrl}/#/settings?error=no_code`)
+    return res.redirect(`${baseUrl}/settings?error=no_code`)
   }
 
   try {
 
     if (!appConfig.configured) {
       console.error('[Callback] App not configured!')
-      return res.redirect(`${baseUrl}/#/settings?error=no_app`)
+      return res.redirect(`${baseUrl}/settings?error=no_app`)
     }
 
     console.log('[Callback] Exchanging code for access token...')
@@ -865,7 +889,7 @@ router.get('/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token
 
     if (!accessToken) {
-      return res.redirect(`${baseUrl}/#/settings?error=no_token`)
+      return res.redirect(`${baseUrl}/settings?error=no_token`)
     }
 
     // Get user info
@@ -916,11 +940,13 @@ router.get('/callback', async (req, res) => {
     githubAccountsConfig.write(accounts)
 
     console.log(`User ${user.login} connected to shared App`)
+    console.log('[OAuth Callback] Base URL:', baseUrl)
+    console.log('[OAuth Callback] Redirect URL:', `${baseUrl}/settings?success=github_connected`)
 
-    res.redirect(`${baseUrl}/#/settings?success=github_connected`)
+    res.redirect(`${baseUrl}/settings?success=github_connected`)
   } catch (error) {
     console.error('OAuth callback error:', error.response?.data || error.message)
-    res.redirect(`${baseUrl}/#/settings?error=auth_failed`)
+    res.redirect(`${baseUrl}/settings?error=auth_failed`)
   }
 })
 

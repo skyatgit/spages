@@ -64,6 +64,46 @@
           </button>
         </div>
 
+        <!-- GitHub App Configuration -->
+        <div class="settings-card" :class="{ 'card-warning': !githubAppConfigured, 'card-success': githubAppConfigured }">
+          <div class="card-header-with-icon">
+            <span class="card-icon">{{ githubAppConfigured ? '✅' : '⚠️' }}</span>
+            <div>
+              <h2>{{ $t('settings.githubAppConfig') }}</h2>
+              <p class="card-description">
+                {{ $t('settings.appNotConfiguredDesc') }}
+              </p>
+            </div>
+          </div>
+
+          <div v-if="!githubAppConfigured">
+            <button class="btn btn-primary" @click="handleSetupGithubApp">
+              ⚙️ {{ $t('settings.setupApp') }}
+            </button>
+          </div>
+
+          <div v-else>
+            <div class="info-list">
+              <div class="info-row">
+                <span class="info-label">{{ $t('settings.appName') }}</span>
+                <span class="info-value">{{ githubAppInfo.slug }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">{{ $t('settings.appId') }}</span>
+                <span class="info-value">{{ githubAppInfo.appId }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">{{ $t('settings.createdAt') }}</span>
+                <span class="info-value">{{ formatDate(githubAppInfo.createdAt) }}</span>
+              </div>
+            </div>
+
+            <button class="btn btn-danger" @click="handleDeleteGithubApp" style="margin-top: 15px;">
+              🗑️ {{ $t('settings.deleteApp') }}
+            </button>
+          </div>
+        </div>
+
         <!-- GitHub Accounts -->
         <div class="settings-card">
           <h2>{{ $t('settings.githubSection') }}</h2>
@@ -71,42 +111,6 @@
             {{ $t('settings.githubDesc') }}
           </p>
 
-          <!-- GitHub App Configuration -->
-          <div class="github-app-config">
-            <h3>{{ $t('settings.githubAppConfig') }}</h3>
-            <div v-if="!githubAppConfigured" class="app-not-configured">
-              <p class="warning-text">⚠️ {{ $t('settings.appNotConfigured') }}</p>
-              <p class="help-text">{{ $t('settings.appNotConfiguredDesc') }}</p>
-              <button class="btn btn-primary" @click="handleSetupGithubApp">
-                ⚙️ {{ $t('settings.setupApp') }}
-              </button>
-            </div>
-            <div v-else class="app-configured">
-              <p class="success-text">✅ {{ $t('settings.appConfigured') }}</p>
-              <div class="app-info-box">
-                <div class="info-item">
-                  <span class="label">{{ $t('settings.appName') }}:</span>
-                  <span class="value">{{ githubAppInfo.slug }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">{{ $t('settings.appId') }}:</span>
-                  <span class="value">{{ githubAppInfo.appId }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">{{ $t('settings.createdAt') }}:</span>
-                  <span class="value">{{ formatDate(githubAppInfo.createdAt) }}</span>
-                </div>
-              </div>
-              <button class="btn btn-danger" @click="handleDeleteGithubApp" style="margin-top: 15px;">
-                🗑️ {{ $t('settings.deleteApp') }}
-              </button>
-            </div>
-          </div>
-
-          <div class="separator"></div>
-
-          <!-- User Accounts List -->
-          <h3>{{ $t('settings.connectedAccounts') }}</h3>
           <div class="github-accounts-list">
             <!-- Authorized Apps -->
             <div
@@ -220,7 +224,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
@@ -233,6 +237,7 @@ const { t } = useI18n()
 const modal = useModal()
 const toast = useToast()
 const route = useRoute()
+const router = useRouter()
 
 // Admin Credentials
 const currentPassword = ref('')
@@ -376,14 +381,11 @@ const handleSetupGithubApp = async () => {
     console.log('[Frontend] Base URL:', baseUrl)
     console.log('[Frontend] Encoded Base URL:', encodeURIComponent(baseUrl))
 
-    // Open GitHub App creation page in a new tab with base URL parameter
+    // Directly navigate to GitHub App creation page
     const setupUrl = `/api/github/setup-app?baseUrl=${encodeURIComponent(baseUrl)}`
-    console.log('[Frontend] Opening URL:', setupUrl)
+    console.log('[Frontend] Navigating to:', setupUrl)
 
-    window.open(setupUrl, '_blank')
-
-    // Remind user to refresh after setup
-    await modal.alert(t('settings.appSetupInNewTab'))
+    window.location.href = setupUrl
   } catch (error) {
     console.error('Failed to setup GitHub App:', error)
     await modal.alert(t('settings.appSetupFailed'))
@@ -471,8 +473,8 @@ const addGithubAccount = async () => {
       return
     }
 
-    // Open the installation page in new tab
-    window.open(url, '_blank')
+    // Directly navigate to the installation page
+    window.location.href = url
   } catch (error) {
     console.error('Failed to get install URL:', error)
     if (error.response?.status === 400) {
@@ -580,14 +582,29 @@ onMounted(async () => {
 
   // Check if coming from OAuth callback or App setup
   if (route.query.success === 'github_connected') {
-    await modal.alert(t('settings.githubConnected'))
+    // 延迟显示，确保页面已经渲染完成
+    setTimeout(() => {
+      toast.success(t('settings.githubConnected'))
+    }, 100)
     await loadGithubAccounts()
+    // 清除 URL 参数，避免刷新页面时重复显示
+    router.replace({ query: {} })
   } else if (route.query.success === 'app_configured') {
-    await modal.alert(t('settings.appConfigured'))
+    // 延迟显示，确保页面已经渲染完成
+    setTimeout(() => {
+      toast.success(t('settings.appConfigured'))
+    }, 100)
     await loadGithubAppConfig()
+    // 清除 URL 参数，避免刷新页面时重复显示
+    router.replace({ query: {} })
   } else if (route.query.error) {
     const errorKey = `settings.githubError_${route.query.error}`
-    await modal.alert(t(errorKey, t('settings.githubAuthFailed')))
+    // 延迟显示，确保页面已经渲染完成
+    setTimeout(() => {
+      toast.error(t(errorKey, t('settings.githubAuthFailed')))
+    }, 100)
+    // 清除 URL 参数，避免刷新页面时重复显示
+    router.replace({ query: {} })
   }
 })
 
@@ -631,6 +648,38 @@ const formatDate = (date) => {
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.settings-card.card-warning {
+  background: linear-gradient(to bottom, #fff3cd 0%, #fff9e6 100%);
+  border: 2px solid #ffc107;
+}
+
+.settings-card.card-success {
+  background: linear-gradient(to bottom, #d4edda 0%, #e8f5e9 100%);
+  border: 2px solid #28a745;
+}
+
+.card-header-with-icon {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.card-icon {
+  font-size: 36px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.card-header-with-icon h2 {
+  margin-bottom: 8px;
+}
+
+.card-header-with-icon .card-description {
+  margin-bottom: 0;
 }
 
 .settings-card h2 {
@@ -873,83 +922,32 @@ const formatDate = (date) => {
 }
 
 /* GitHub App Configuration Styles */
-.github-app-config {
-  margin-bottom: 30px;
-  padding-bottom: 20px;
+.info-list {
+  margin: 20px 0;
 }
 
-.github-app-config h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #2c3e50;
-  margin-bottom: 15px;
-}
-
-.app-not-configured {
-  padding: 20px;
-  background: #fff3cd;
-  border: 2px solid #ffc107;
-  border-radius: 8px;
-}
-
-.app-configured {
-  padding: 20px;
-  background: #d4edda;
-  border: 2px solid #28a745;
-  border-radius: 8px;
-}
-
-.warning-text {
-  color: #856404;
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-
-.success-text {
-  color: #155724;
-  font-weight: 600;
-  margin-bottom: 15px;
-}
-
-.help-text {
-  color: #856404;
-  font-size: 14px;
-  margin-bottom: 15px;
-  line-height: 1.5;
-}
-
-.app-info-box {
-  background: white;
-  padding: 15px;
-  border-radius: 6px;
-  margin-top: 10px;
-}
-
-.info-item {
+.info-row {
   display: flex;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #e9ecef;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #ecf0f1;
 }
 
-.info-item:last-child {
+.info-row:last-child {
   border-bottom: none;
 }
 
-.info-item .label {
+.info-label {
   font-weight: 600;
   color: #495057;
+  font-size: 14px;
 }
 
-.info-item .value {
+.info-value {
   color: #6c757d;
   font-family: monospace;
-}
-
-.separator {
-  height: 1px;
-  background: #ecf0f1;
-  margin: 30px 0 20px 0;
+  font-size: 14px;
 }
 
 .no-accounts {
