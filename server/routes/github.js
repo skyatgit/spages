@@ -7,6 +7,40 @@ import { authMiddleware } from '../utils/auth.js'
 
 const router = express.Router()
 
+// Helper function to generate unique 8-character identifier
+// Uses Base62 encoding (0-9, a-z, A-Z) for better entropy
+// Combines timestamp and random data to ensure uniqueness
+const generateUniqueId = () => {
+  const base62Chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+  // Get current timestamp in milliseconds
+  const timestamp = Date.now()
+
+  // Generate random bytes for additional entropy
+  const randomBytes = crypto.randomBytes(4)
+
+  // Combine timestamp (6 bytes) and random (4 bytes) = 10 bytes total
+  const buffer = Buffer.allocUnsafe(10)
+  buffer.writeBigUInt64BE(BigInt(timestamp), 0) // Write timestamp (first 8 bytes, we'll use last 6)
+  randomBytes.copy(buffer, 6) // Copy 4 random bytes
+
+  // Convert to a large number and then to base62
+  // We'll use the last 8 bytes for conversion
+  const num = buffer.readBigUInt64BE(2) // Read 8 bytes starting from position 2
+
+  // Convert to base62 (8 characters)
+  let result = ''
+  let remaining = num
+
+  for (let i = 0; i < 8; i++) {
+    const index = Number(remaining % 62n)
+    result = base62Chars[index] + result
+    remaining = remaining / 62n
+  }
+
+  return result
+}
+
 // Helper function to generate installation access token
 const getInstallationAccessToken = async (installationId) => {
   const appConfig = githubAppConfig.read()
@@ -117,10 +151,9 @@ router.get('/setup-app', async (req, res) => {
 
     // Define the shared GitHub App manifest
     // Note: No webhook URL - will be configured later on public server
-    // Add short timestamp and random suffix to avoid name conflicts
-    const shortTimestamp = Date.now().toString().slice(-8) // Last 8 digits
-    const randomSuffix = crypto.randomBytes(2).toString('hex') // 4 hex chars
-    const appName = `SPages-${shortTimestamp}${randomSuffix}`
+    // Generate unique 8-character identifier
+    const uniqueId = generateUniqueId()
+    const appName = `SPages-${uniqueId}`
 
     console.log('[GitHub App Setup GET] Generated App Name:', appName)
 
@@ -181,10 +214,9 @@ router.post('/setup-app', authMiddleware, async (req, res) => {
 
     // Define the shared GitHub App manifest
     // Note: No webhook URL - will be configured later on public server
-    // Add short timestamp and random suffix to avoid name conflicts
-    const shortTimestamp = Date.now().toString().slice(-8) // Last 8 digits
-    const randomSuffix = crypto.randomBytes(2).toString('hex') // 4 hex chars
-    const appName = `SPages-${shortTimestamp}${randomSuffix}`
+    // Generate unique 8-character identifier
+    const uniqueId = generateUniqueId()
+    const appName = `SPages-${uniqueId}`
 
     console.log('[GitHub App Setup POST] Generated App Name:', appName)
 
@@ -370,10 +402,9 @@ router.post('/create-app', authMiddleware, async (req, res) => {
 
     // Define the GitHub App manifest
     // Note: No webhook URL - will be configured later on public server
-    // Add short timestamp and random suffix to avoid name conflicts
-    const shortTimestamp = Date.now().toString().slice(-8) // Last 8 digits
-    const randomSuffix = crypto.randomBytes(2).toString('hex') // 4 hex chars
-    const appName = `SPages-${shortTimestamp}${randomSuffix}`
+    // Generate unique 8-character identifier
+    const uniqueId = generateUniqueId()
+    const appName = `SPages-${uniqueId}`
 
     const manifest = {
       name: appName,
