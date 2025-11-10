@@ -111,6 +111,98 @@ router.get('/app-config', authMiddleware, (req, res) => {
   }
 })
 
+// Delete shared GitHub App configuration
+router.delete('/app-config', authMiddleware, async (req, res) => {
+  try {
+    const appConfig = githubAppConfig.read()
+
+    if (!appConfig.configured) {
+      return res.status(404).json({ error: 'No GitHub App configured' })
+    }
+
+    const results = {
+      localDeleted: false,
+      installationsDeleted: 0,
+      errors: []
+    }
+
+    // 删除所有关联的 installations
+    try {
+      const accounts = githubAccountsConfig.read()
+      const toDelete = []
+
+      // 找出所有与此 App 关联的 installations
+      Object.entries(accounts).forEach(([key, account]) => {
+        if (account.appId === appConfig.appId) {
+          toDelete.push({ key, account })
+        }
+      })
+
+      // 尝试从 GitHub 删除每个 installation
+      for (const { key, account } of toDelete) {
+        if (account.installationId && appConfig.pem) {
+          try {
+            const now = Math.floor(Date.now() / 1000)
+            const payload = {
+              iat: now - 60,
+              exp: now + (10 * 60),
+              iss: appConfig.appId
+            }
+            const appToken = jwt.sign(payload, appConfig.pem, { algorithm: 'RS256' })
+
+            await axios.delete(
+              `https://api.github.com/app/installations/${account.installationId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${appToken}`,
+                  Accept: 'application/vnd.github+json',
+                  'X-GitHub-Api-Version': '2022-11-28'
+                }
+              }
+            )
+            console.log(`Deleted installation ${account.installationId} from GitHub`)
+          } catch (error) {
+            console.error(`Failed to delete installation ${account.installationId}:`, error.response?.data || error.message)
+            results.errors.push(`Installation ${account.installationId}: ${error.response?.data?.message || error.message}`)
+          }
+        }
+
+        // 删除本地记录
+        delete accounts[key]
+        results.installationsDeleted++
+      }
+
+      githubAccountsConfig.write(accounts)
+    } catch (error) {
+      console.error('Error deleting installations:', error)
+      results.errors.push(`Installations cleanup failed: ${error.message}`)
+    }
+
+    // 删除 App 配置
+    githubAppConfig.write({
+      configured: false
+    })
+    results.localDeleted = true
+
+    console.log(`Deleted GitHub App: ${appConfig.slug} (ID: ${appConfig.appId})`)
+    console.log(`Deleted ${results.installationsDeleted} installations`)
+
+    // 生成快捷删除链接
+    const appDeleteUrl = `https://github.com/settings/apps/${appConfig.slug}/advanced`
+
+    res.json({
+      success: true,
+      message: 'GitHub App deleted successfully',
+      results,
+      appDeleteUrl,
+      note: 'You need to manually delete the app from GitHub'
+    })
+  } catch (error) {
+    console.error('Error deleting app config:', error)
+    res.status(500).json({ error: 'Failed to delete app config' })
+  }
+})
+
 // Create shared GitHub App - GET version (for direct navigation)
 // Note: No authMiddleware here since it's accessed via browser redirect
 router.get('/setup-app', async (req, res) => {

@@ -5,6 +5,11 @@ export const getGithubAppConfig = async () => {
   return apiClient.get('/github/app-config')
 }
 
+// Delete shared GitHub App configuration
+export const deleteGithubAppConfig = async () => {
+  return apiClient.delete('/github/app-config')
+}
+
 // Setup shared GitHub App (one-time)
 export const setupGithubApp = async () => {
   return apiClient.post('/github/setup-app')

@@ -97,6 +97,9 @@
                   <span class="value">{{ formatDate(githubAppInfo.createdAt) }}</span>
                 </div>
               </div>
+              <button class="btn btn-danger" @click="handleDeleteGithubApp" style="margin-top: 15px;">
+                🗑️ {{ $t('settings.deleteApp') }}
+              </button>
             </div>
           </div>
 
@@ -257,7 +260,7 @@ import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { useToast } from '@/utils/toast'
-import { getGithubAppConfig, setupGithubApp, getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount, removeGithubUser } from '@/api/github'
+import { getGithubAppConfig, deleteGithubAppConfig, setupGithubApp, getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount, removeGithubUser } from '@/api/github'
 import { getSystemInfo, getStorageInfo, clearCache as clearCacheAPI, clearLogs as clearLogsAPI } from '@/api/system'
 import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
 
@@ -426,6 +429,47 @@ const handleSetupGithubApp = async () => {
   } catch (error) {
     console.error('Failed to setup GitHub App:', error)
     await modal.alert(t('settings.appSetupFailed'))
+  }
+}
+
+// Delete GitHub App
+const handleDeleteGithubApp = async () => {
+  const confirmed = await modal.confirm(t('settings.deleteAppConfirm'))
+  if (!confirmed) return
+
+  try {
+    const response = await deleteGithubAppConfig()
+
+    // Show results
+    const { results, note, appDeleteUrl } = response
+    let message = t('settings.appDeleted')
+
+    if (results.installationsDeleted > 0) {
+      message += `\n${t('settings.installationsDeleted', { count: results.installationsDeleted })}`
+    }
+
+    if (results.errors && results.errors.length > 0) {
+      message += `\n\n${t('settings.someErrorsOccurred')}:\n${results.errors.join('\n')}`
+    }
+
+    if (note && appDeleteUrl) {
+      message += `\n\n⚠️ ${t('settings.manualDeleteNote')}`
+      const openGitHub = await modal.confirm(message + `\n\n${t('settings.openGitHubSettings')}`)
+      if (openGitHub) {
+        window.open(appDeleteUrl, '_blank')
+      }
+    } else {
+      await modal.alert(message)
+    }
+
+    // Reload configurations
+    await loadGithubAppConfig()
+    await loadGithubAccounts()
+
+    toast.success(t('settings.appDeletedSuccess'))
+  } catch (error) {
+    console.error('Failed to delete GitHub App:', error)
+    await modal.alert(t('settings.appDeleteFailed') + ': ' + (error.response?.data?.error || error.message))
   }
 }
 
@@ -748,6 +792,15 @@ const formatDate = (date) => {
 
 .btn-secondary:hover {
   background: #bdc3c7;
+}
+
+.btn-danger {
+  background: #e74c3c;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c0392b;
 }
 
 .btn-icon {
