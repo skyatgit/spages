@@ -64,6 +64,8 @@
                   <span class="meta-item">{{ repo.fullName }}</span>
                   <span class="meta-item">{{ repo.private ? '🔒 Private' : '🌐 Public' }}</span>
                   <span v-if="repo.defaultBranch" class="meta-item">📌 {{ repo.defaultBranch }}</span>
+                  <span v-if="repo.createdAt" class="meta-item">📅 {{ $t('addProject.created') }}: {{ formatFullDate(repo.createdAt) }}</span>
+                  <span v-if="repo.updatedAt" class="meta-item">🕒 {{ $t('addProject.updated') }}: {{ formatFullDate(repo.updatedAt) }}</span>
                 </div>
               </div>
               <div v-if="selectedRepo?.id === repo.id" class="check-icon">✓</div>
@@ -449,6 +451,50 @@ const addProject = async () => {
     await modal.alert(t('addProject.createProjectFailed'))
   }
 }
+
+// 格式化为完整的时间（带相对时间）
+const formatFullDate = (dateString) => {
+  if (!dateString) return ''
+
+  const date = new Date(dateString)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+
+  const fullDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+
+  // 计算相对时间
+  const now = new Date()
+  const diffMs = now - date
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+
+  let relativeTime = ''
+  if (diffMinutes < 1) {
+    relativeTime = t('addProject.justNow')
+  } else if (diffMinutes < 60) {
+    relativeTime = t('addProject.minutesAgo', { count: diffMinutes })
+  } else if (diffHours < 24) {
+    relativeTime = t('addProject.hoursAgo', { count: diffHours })
+  } else if (diffDays < 7) {
+    relativeTime = t('addProject.daysAgo', { count: diffDays })
+  } else if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7)
+    relativeTime = t('addProject.weeksAgo', { count: weeks })
+  } else if (diffDays < 365) {
+    const months = Math.floor(diffDays / 30)
+    relativeTime = t('addProject.monthsAgo', { count: months })
+  } else {
+    const years = Math.floor(diffDays / 365)
+    relativeTime = t('addProject.yearsAgo', { count: years })
+  }
+
+  return `${fullDate} (${relativeTime})`
+}
 </script>
 
 <style scoped>
@@ -654,6 +700,7 @@ const addProject = async () => {
   gap: 15px;
   font-size: 12px;
   color: #95a5a6;
+  flex-wrap: wrap;
 }
 
 .check-icon {

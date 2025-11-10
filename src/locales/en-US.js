@@ -140,7 +140,16 @@ export default {
     loadReposFailed: 'Failed to load repositories',
     loadBranchesFailed: 'Failed to load branches',
     createProjectFailed: 'Failed to create project',
-    projectAddedAndDeploying: 'Project created, deploying...'
+    projectAddedAndDeploying: 'Project created, deploying...',
+    justNow: 'Just now',
+    minutesAgo: '{count} minutes ago',
+    hoursAgo: '{count} hours ago',
+    daysAgo: '{count} days ago',
+    weeksAgo: '{count} weeks ago',
+    monthsAgo: '{count} months ago',
+    yearsAgo: '{count} years ago',
+    created: 'Created',
+    updated: 'Updated'
   },
 
   projectDetail: {

@@ -140,7 +140,16 @@ export default {
     loadReposFailed: '加载仓库失败',
     loadBranchesFailed: '加载分支失败',
     createProjectFailed: '创建项目失败',
-    projectAddedAndDeploying: '项目已创建，正在部署中...'
+    projectAddedAndDeploying: '项目已创建，正在部署中...',
+    justNow: '刚刚更新',
+    minutesAgo: '{count} 分钟前',
+    hoursAgo: '{count} 小时前',
+    daysAgo: '{count} 天前',
+    weeksAgo: '{count} 周前',
+    monthsAgo: '{count} 个月前',
+    yearsAgo: '{count} 年前',
+    created: '创建',
+    updated: '更新'
   },
 
   projectDetail: {

@@ -1161,8 +1161,18 @@ router.get('/accounts/:id/repositories', authMiddleware, async (req, res) => {
       description: repo.description,
       private: repo.private,
       url: repo.html_url,
-      defaultBranch: repo.default_branch
+      defaultBranch: repo.default_branch,
+      updatedAt: repo.updated_at,
+      createdAt: repo.created_at,
+      pushedAt: repo.pushed_at
     }))
+
+    // 按更新时间降序排序（最近更新的在前）
+    repos.sort((a, b) => {
+      const dateA = new Date(a.updatedAt || a.pushedAt || a.createdAt)
+      const dateB = new Date(b.updatedAt || b.pushedAt || b.createdAt)
+      return dateB - dateA
+    })
 
     res.json(repos)
   } catch (error) {
