@@ -7,6 +7,39 @@ import { authMiddleware } from '../utils/auth.js'
 
 const router = express.Router()
 
+// Helper function to generate installation access token
+const getInstallationAccessToken = async (installationId) => {
+  const appConfig = githubAppConfig.read()
+
+  if (!appConfig.configured || !appConfig.pem || !appConfig.appId) {
+    throw new Error('GitHub App not configured')
+  }
+
+  // Generate JWT for the app
+  const now = Math.floor(Date.now() / 1000)
+  const payload = {
+    iat: now - 60,
+    exp: now + (10 * 60),
+    iss: appConfig.appId
+  }
+  const appToken = jwt.sign(payload, appConfig.pem, { algorithm: 'RS256' })
+
+  // Get installation access token
+  const response = await axios.post(
+    `https://api.github.com/app/installations/${installationId}/access_tokens`,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${appToken}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    }
+  )
+
+  return response.data.token
+}
+
 // Get base URL dynamically from request (for proxy support)
 const getBaseUrl = (req) => {
   // 如果设置了环境变量，使用环境变量
@@ -981,18 +1014,24 @@ router.get('/accounts/:id/repositories', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Account not found' })
     }
 
-    const response = await axios.get('https://api.github.com/user/repos', {
+    if (!account.installationId) {
+      return res.status(400).json({ error: 'No installation ID found for this account' })
+    }
+
+    // Get fresh installation access token
+    const accessToken = await getInstallationAccessToken(account.installationId)
+
+    const response = await axios.get('https://api.github.com/installation/repositories', {
       headers: {
-        Authorization: `Bearer ${account.accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         Accept: 'application/vnd.github+json'
       },
       params: {
-        sort: 'updated',
         per_page: 100
       }
     })
 
-    const repos = response.data.map(repo => ({
+    const repos = response.data.repositories.map(repo => ({
       id: repo.id,
       name: repo.name,
       fullName: repo.full_name,
@@ -1020,9 +1059,16 @@ router.get('/accounts/:id/repositories/:owner/:repo/branches', authMiddleware, a
       return res.status(404).json({ error: 'Account not found' })
     }
 
+    if (!account.installationId) {
+      return res.status(400).json({ error: 'No installation ID found for this account' })
+    }
+
+    // Get fresh installation access token
+    const accessToken = await getInstallationAccessToken(account.installationId)
+
     const response = await axios.get(`https://api.github.com/repos/${owner}/${repo}/branches`, {
       headers: {
-        Authorization: `Bearer ${account.accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         Accept: 'application/vnd.github+json'
       }
     })
