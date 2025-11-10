@@ -268,6 +268,21 @@ const loadRepositories = async () => {
 }
 
 const selectRepo = async (repo) => {
+  // 如果点击的是已选中的仓库，则取消选中
+  if (selectedRepo.value && selectedRepo.value.id === repo.id) {
+    selectedRepo.value = null
+    projectName.value = ''
+    branch.value = ''
+    branches.value = []
+    port.value = 3001
+    portError.value = ''
+    portAvailable.value = false
+    projectNameError.value = ''
+    projectNameAvailable.value = false
+    return
+  }
+
+  // 选中新仓库
   selectedRepo.value = repo
 
   // 规范化项目名称：将 . 替换为 -，确保符合命名规则
@@ -294,18 +309,34 @@ const selectRepo = async (repo) => {
 const loadBranches = async () => {
   if (!selectedRepo.value || !selectedAccount.value) return
 
+  // 保存当前选中的仓库引用，用于检查是否被取消选中
+  const currentRepo = selectedRepo.value
+
   loadingBranches.value = true
   try {
     // 从 fullName 中提取 owner 和 repo
-    const [owner, repo] = selectedRepo.value.fullName.split('/')
+    const [owner, repo] = currentRepo.fullName.split('/')
     const branchList = await getGithubBranches(selectedAccount.value, owner, repo)
+
+    // 检查在加载过程中仓库是否被取消选中
+    if (selectedRepo.value !== currentRepo) {
+      console.log('Repository was deselected during branch loading, canceling...')
+      return
+    }
+
     branches.value = branchList
 
     // 自动选择默认分支
     if (branchList.length > 0) {
-      branch.value = selectedRepo.value.defaultBranch || branchList[0]
+      branch.value = currentRepo.defaultBranch || branchList[0]
     }
   } catch (error) {
+    // 如果在加载过程中仓库被取消选中，不显示错误提示
+    if (selectedRepo.value !== currentRepo) {
+      console.log('Repository was deselected during branch loading, ignoring error')
+      return
+    }
+
     console.error('Failed to load branches:', error)
     await modal.alert(t('addProject.loadBranchesFailed'))
     branches.value = []
