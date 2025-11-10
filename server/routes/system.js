@@ -45,10 +45,10 @@ function getDirectorySize(dirPath) {
 }
 
 /**
- * 将字节转换为 MB
+ * 将字节转换为 MB，保留两位小数
  */
 function bytesToMB(bytes) {
-  return Math.round((bytes / (1024 * 1024)) * 100) / 100
+  return parseFloat((bytes / (1024 * 1024)).toFixed(2))
 }
 
 /**
@@ -114,18 +114,37 @@ router.get('/storage', authMiddleware, (req, res) => {
     // Calculate projects directory size
     const projectsSize = bytesToMB(getDirectorySize(projectsDir))
 
-    // Calculate cache size (node_modules in all projects)
+    // Calculate dependencies size (node_modules)
+    let dependenciesSize = 0
+    if (fs.existsSync(projectsDir)) {
+      const projects = fs.readdirSync(projectsDir)
+      for (const project of projects) {
+        const sourcePath = path.join(projectsDir, project, 'source')
+        const nodeModulesPath = path.join(sourcePath, 'node_modules')
+        dependenciesSize += getDirectorySize(nodeModulesPath)
+      }
+    }
+    dependenciesSize = bytesToMB(dependenciesSize)
+
+    // Calculate build cache size (真正的构建缓存)
     let cacheSize = 0
     if (fs.existsSync(projectsDir)) {
       const projects = fs.readdirSync(projectsDir)
       for (const project of projects) {
-        const nodeModulesPath = path.join(projectsDir, project, 'node_modules')
-        const cachePath = path.join(projectsDir, project, '.cache')
-        const distPath = path.join(projectsDir, project, 'dist')
+        const sourcePath = path.join(projectsDir, project, 'source')
 
-        cacheSize += getDirectorySize(nodeModulesPath)
+        // 只统计真正的缓存文件
+        const cachePath = path.join(sourcePath, '.cache')
+        const nextPath = path.join(sourcePath, '.next')
+        const nuxtPath = path.join(sourcePath, '.nuxt')
+        const viteCache = path.join(sourcePath, 'node_modules', '.vite')
+        const turboCache = path.join(sourcePath, '.turbo')
+
         cacheSize += getDirectorySize(cachePath)
-        // Don't count dist as cache, it's part of project data
+        cacheSize += getDirectorySize(nextPath)
+        cacheSize += getDirectorySize(nuxtPath)
+        cacheSize += getDirectorySize(viteCache)
+        cacheSize += getDirectorySize(turboCache)
       }
     }
     cacheSize = bytesToMB(cacheSize)
@@ -135,7 +154,8 @@ router.get('/storage', authMiddleware, (req, res) => {
     if (fs.existsSync(projectsDir)) {
       const projects = fs.readdirSync(projectsDir)
       for (const project of projects) {
-        const logsPath = path.join(projectsDir, project, 'logs')
+        // 日志在 .spages/logs 目录下
+        const logsPath = path.join(projectsDir, project, '.spages', 'logs')
         logsSize += getDirectorySize(logsPath)
       }
     }
@@ -144,17 +164,18 @@ router.get('/storage', authMiddleware, (req, res) => {
     logsSize += getDirectorySize(globalLogsPath)
     logsSize = bytesToMB(logsSize)
 
-    // Total (projects includes everything, so we need to subtract cache and logs to avoid double counting)
+    // Total (projects includes everything, so we need to subtract dependencies, cache and logs to avoid double counting)
     const total = projectsSize
-    const projectsDataOnly = total - cacheSize - logsSize
+    const projectsDataOnly = total - dependenciesSize - cacheSize - logsSize
 
     res.json({
       success: true,
       data: {
-        projects: Math.max(0, projectsDataOnly),
-        cache: cacheSize,
-        logs: logsSize,
-        total: total
+        projects: parseFloat(Math.max(0, projectsDataOnly).toFixed(2)),
+        dependencies: parseFloat(dependenciesSize.toFixed(2)),
+        cache: parseFloat(cacheSize.toFixed(2)),
+        logs: parseFloat(logsSize.toFixed(2)),
+        total: parseFloat(total.toFixed(2))
       }
     })
   } catch (error) {
@@ -180,19 +201,11 @@ router.post('/clear-cache', authMiddleware, (req, res) => {
       const projects = fs.readdirSync(projectsDir)
 
       for (const project of projects) {
-        const projectPath = path.join(projectsDir, project)
+        const sourcePath = path.join(projectsDir, project, 'source')
 
-        // Clear node_modules
-        const nodeModulesPath = path.join(projectPath, 'node_modules')
-        if (fs.existsSync(nodeModulesPath)) {
-          const size = getDirectorySize(nodeModulesPath)
-          fs.rmSync(nodeModulesPath, { recursive: true, force: true })
-          clearedSize += size
-          clearedCount++
-        }
-
+        // 只清理真正的构建缓存（不包括 node_modules）
         // Clear .cache
-        const cachePath = path.join(projectPath, '.cache')
+        const cachePath = path.join(sourcePath, '.cache')
         if (fs.existsSync(cachePath)) {
           const size = getDirectorySize(cachePath)
           fs.rmSync(cachePath, { recursive: true, force: true })
@@ -201,7 +214,7 @@ router.post('/clear-cache', authMiddleware, (req, res) => {
         }
 
         // Clear .next (Next.js)
-        const nextPath = path.join(projectPath, '.next')
+        const nextPath = path.join(sourcePath, '.next')
         if (fs.existsSync(nextPath)) {
           const size = getDirectorySize(nextPath)
           fs.rmSync(nextPath, { recursive: true, force: true })
@@ -210,10 +223,28 @@ router.post('/clear-cache', authMiddleware, (req, res) => {
         }
 
         // Clear .nuxt (Nuxt.js)
-        const nuxtPath = path.join(projectPath, '.nuxt')
+        const nuxtPath = path.join(sourcePath, '.nuxt')
         if (fs.existsSync(nuxtPath)) {
           const size = getDirectorySize(nuxtPath)
           fs.rmSync(nuxtPath, { recursive: true, force: true })
+          clearedSize += size
+          clearedCount++
+        }
+
+        // Clear node_modules/.vite (Vite cache)
+        const viteCachePath = path.join(sourcePath, 'node_modules', '.vite')
+        if (fs.existsSync(viteCachePath)) {
+          const size = getDirectorySize(viteCachePath)
+          fs.rmSync(viteCachePath, { recursive: true, force: true })
+          clearedSize += size
+          clearedCount++
+        }
+
+        // Clear .turbo (Turbo cache)
+        const turboPath = path.join(sourcePath, '.turbo')
+        if (fs.existsSync(turboPath)) {
+          const size = getDirectorySize(turboPath)
+          fs.rmSync(turboPath, { recursive: true, force: true })
           clearedSize += size
           clearedCount++
         }
@@ -252,7 +283,8 @@ router.post('/clear-logs', authMiddleware, (req, res) => {
       const projects = fs.readdirSync(projectsDir)
 
       for (const project of projects) {
-        const logsPath = path.join(projectsDir, project, 'logs')
+        // 日志在 .spages/logs 目录下
+        const logsPath = path.join(projectsDir, project, '.spages', 'logs')
         if (fs.existsSync(logsPath)) {
           const size = getDirectorySize(logsPath)
 
@@ -305,6 +337,49 @@ router.post('/clear-logs', authMiddleware, (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to clear logs'
+    })
+  }
+})
+
+/**
+ * 清空依赖包 (node_modules)
+ * POST /api/system/clear-dependencies
+ */
+router.post('/clear-dependencies', authMiddleware, (req, res) => {
+  try {
+    const projectsDir = path.resolve(process.cwd(), 'projects')
+    let clearedSize = 0
+    let clearedCount = 0
+
+    if (fs.existsSync(projectsDir)) {
+      const projects = fs.readdirSync(projectsDir)
+
+      for (const project of projects) {
+        const sourcePath = path.join(projectsDir, project, 'source')
+        const nodeModulesPath = path.join(sourcePath, 'node_modules')
+
+        if (fs.existsSync(nodeModulesPath)) {
+          const size = getDirectorySize(nodeModulesPath)
+          fs.rmSync(nodeModulesPath, { recursive: true, force: true })
+          clearedSize += size
+          clearedCount++
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        clearedSize: bytesToMB(clearedSize),
+        clearedCount
+      },
+      message: `Cleared ${clearedCount} node_modules directories, freed ${bytesToMB(clearedSize)} MB`
+    })
+  } catch (error) {
+    console.error('Clear dependencies error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear dependencies'
     })
   }
 })

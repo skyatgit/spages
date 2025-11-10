@@ -25,6 +25,14 @@ export const clearCache = async () => {
 }
 
 /**
+ * 清空依赖包 (node_modules)
+ */
+export const clearDependencies = async () => {
+  const response = await apiClient.post('/system/clear-dependencies')
+  return response.data
+}
+
+/**
  * 清空日志
  */
 export const clearLogs = async () => {

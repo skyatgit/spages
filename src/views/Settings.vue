@@ -189,41 +189,6 @@
           </button>
         </div>
 
-        <!-- Storage & Cleanup -->
-        <div class="settings-card">
-          <h2>{{ $t('settings.storageSection') }}</h2>
-          <p class="card-description">
-            {{ $t('settings.storageDesc') }}
-          </p>
-
-          <div class="storage-info">
-            <div class="storage-item">
-              <div class="storage-label">{{ $t('settings.projectsData') }}</div>
-              <div class="storage-value">{{ storageData.projects }} MB</div>
-            </div>
-            <div class="storage-item">
-              <div class="storage-label">{{ $t('settings.buildCache') }}</div>
-              <div class="storage-value">{{ storageData.cache }} MB</div>
-            </div>
-            <div class="storage-item">
-              <div class="storage-label">{{ $t('settings.logs') }}</div>
-              <div class="storage-value">{{ storageData.logs }} MB</div>
-            </div>
-            <div class="storage-item">
-              <div class="storage-label">{{ $t('settings.total') }}</div>
-              <div class="storage-value total">{{ storageData.total }} MB</div>
-            </div>
-          </div>
-
-          <div class="cleanup-actions">
-            <button class="btn btn-secondary" @click="clearCache">
-              🗑️ {{ $t('settings.clearCache') }}
-            </button>
-            <button class="btn btn-secondary" @click="clearLogs">
-              🗑️ {{ $t('settings.clearLogs') }}
-            </button>
-          </div>
-        </div>
 
         <!-- System Information -->
         <div class="settings-card">
@@ -261,7 +226,7 @@ import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { useToast } from '@/utils/toast'
 import { getGithubAppConfig, deleteGithubAppConfig, setupGithubApp, getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount, removeGithubUser } from '@/api/github'
-import { getSystemInfo, getStorageInfo, clearCache as clearCacheAPI, clearLogs as clearLogsAPI } from '@/api/system'
+import { getSystemInfo } from '@/api/system'
 import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
 
 const { t } = useI18n()
@@ -282,13 +247,6 @@ const loadingAccounts = ref(false)
 const githubAppConfigured = ref(false)
 const githubAppInfo = ref({})
 
-// Storage Data
-const storageData = ref({
-  projects: 0,
-  cache: 0,
-  logs: 0,
-  total: 0
-})
 
 // System Info
 const systemInfo = ref({
@@ -497,16 +455,6 @@ const loadSystemInfo = async () => {
   }
 }
 
-// Load storage information
-const loadStorageInfo = async () => {
-  try {
-    const storage = await getStorageInfo()
-    storageData.value = storage
-  } catch (error) {
-    console.error('Failed to load storage info:', error)
-  }
-}
-
 // Add GitHub account via GitHub App installation
 const addGithubAccount = async () => {
   try {
@@ -629,7 +577,6 @@ onMounted(async () => {
   await loadGithubAppConfig() // Load GitHub App configuration first
   await loadGithubAccounts()
   await loadSystemInfo()
-  await loadStorageInfo()
 
   // Check if coming from OAuth callback or App setup
   if (route.query.success === 'github_connected') {
@@ -644,35 +591,6 @@ onMounted(async () => {
   }
 })
 
-const clearCache = async () => {
-  const confirmed = await modal.confirm(t('settings.clearCacheConfirm'))
-  if (confirmed) {
-    try {
-      const result = await clearCacheAPI()
-      toast.success(t('settings.cacheCleared'))
-      // Reload storage info to reflect changes
-      await loadStorageInfo()
-    } catch (error) {
-      console.error('Failed to clear cache:', error)
-      toast.error(t('settings.clearCacheFailed'))
-    }
-  }
-}
-
-const clearLogs = async () => {
-  const confirmed = await modal.confirm(t('settings.clearLogsConfirm'))
-  if (confirmed) {
-    try {
-      const result = await clearLogsAPI()
-      toast.success(t('settings.logsCleared'))
-      // Reload storage info to reflect changes
-      await loadStorageInfo()
-    } catch (error) {
-      console.error('Failed to clear logs:', error)
-      toast.error(t('settings.clearLogsFailed'))
-    }
-  }
-}
 
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString()
@@ -1146,42 +1064,6 @@ const formatDate = (date) => {
   gap: 8px;
 }
 
-.storage-info {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 15px;
-  margin-bottom: 20px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.storage-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.storage-label {
-  color: #7f8c8d;
-  font-size: 14px;
-}
-
-.storage-value {
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.storage-value.total {
-  color: #3498db;
-  font-size: 18px;
-}
-
-.cleanup-actions {
-  display: flex;
-  gap: 10px;
-}
 
 .info-grid {
   display: grid;
