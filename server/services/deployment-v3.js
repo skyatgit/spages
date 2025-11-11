@@ -30,6 +30,7 @@ const deployingProjects = new Map() // 存储正在部署的项目 ID
 const logSubscribers = new Map() // projectId -> Set of response objects
 const projectStateSubscribers = new Map() // projectId -> Set of response objects (单个项目状态)
 const allProjectsStateSubscribers = new Set() // Set of response objects (所有项目状态)
+const deploymentHistorySubscribers = new Map() // projectId -> Set of response objects (部署历史)
 
 /**
  * 部署日志管理
@@ -141,6 +142,9 @@ export async function deployProjectV3(projectId, options = {}) {
 
     // Update status to building and broadcast
     updateAndBroadcastProjectState(projectId, { status: 'building' })
+
+    // 广播部署开始（立即显示在部署历史中）
+    broadcastDeploymentHistory(projectId, deployment)
 
     // Step 1: Clone repository
     logger.info('Step 1/6: Cloning repository...')
@@ -268,6 +272,12 @@ export async function deployProjectV3(projectId, options = {}) {
     // 移除部署中标记
     deployingProjects.delete(projectId)
 
+    // 广播部署历史更新
+    const completedDeployment = history.read().history[0] // 获取最新的部署记录
+    if (completedDeployment) {
+      broadcastDeploymentHistory(projectId, completedDeployment)
+    }
+
     return { success: true, logs: logger.getLogs() }
   } catch (error) {
     logger.error(`❌ Deployment failed: ${error.message}`)
@@ -284,6 +294,12 @@ export async function deployProjectV3(projectId, options = {}) {
       duration,
       error: error.message
     })
+
+    // 广播部署历史更新
+    const failedDeployment = history.read().history[0]
+    if (failedDeployment) {
+      broadcastDeploymentHistory(projectId, failedDeployment)
+    }
 
     throw error
   }
@@ -1019,5 +1035,52 @@ export function updateAndBroadcastProjectState(projectId, updates) {
 
   broadcastProjectState(projectId, stateData)
   console.log(`[SSE] Broadcasted state update for project ${projectId}:`, updates)
+}
+
+/**
+ * 广播部署历史更新
+ */
+export function broadcastDeploymentHistory(projectId, deployment) {
+  const subscribers = deploymentHistorySubscribers.get(projectId)
+  if (!subscribers || subscribers.size === 0) {
+    return
+  }
+
+  const message = `data: ${JSON.stringify({ type: 'deployment.completed', data: deployment })}\n\n`
+
+  for (const res of subscribers) {
+    try {
+      res.write(message)
+    } catch (error) {
+      console.error(`[SSE] Failed to send deployment history to subscriber:`, error.message)
+      subscribers.delete(res)
+    }
+  }
+
+  console.log(`[SSE] Broadcasted deployment history for project ${projectId}`)
+}
+
+/**
+ * 订阅部署历史
+ */
+export function subscribeToDeploymentHistory(projectId, res) {
+  if (!deploymentHistorySubscribers.has(projectId)) {
+    deploymentHistorySubscribers.set(projectId, new Set())
+  }
+
+  deploymentHistorySubscribers.get(projectId).add(res)
+  console.log(`[SSE] New deployment history subscriber for ${projectId}, total: ${deploymentHistorySubscribers.get(projectId).size}`)
+
+  res.on('close', () => {
+    const subscribers = deploymentHistorySubscribers.get(projectId)
+    if (subscribers) {
+      subscribers.delete(res)
+      console.log(`[SSE] Deployment history subscriber disconnected from ${projectId}, remaining: ${subscribers.size}`)
+
+      if (subscribers.size === 0) {
+        deploymentHistorySubscribers.delete(projectId)
+      }
+    }
+  })
 }
 

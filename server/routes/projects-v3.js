@@ -11,7 +11,8 @@ import {
   subscribeToLogs,
   subscribeToProjectState,
   subscribeToAllProjectsState,
-  broadcastProjectDeleted
+  broadcastProjectDeleted,
+  subscribeToDeploymentHistory
 } from '../services/deployment-v3.js'
 import {
   ProjectPaths,
@@ -571,6 +572,39 @@ router.get('/:id/deployments', authMiddleware, (req, res) => {
     console.error('Error fetching deployment history:', error)
     res.status(500).json({ error: 'Failed to fetch deployment history' })
   }
+})
+
+// SSE: Real-time deployment history stream
+router.get('/:id/deployments/stream', (req, res) => {
+  const { id } = req.params
+  const { token } = req.query
+
+  // 验证 token
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' })
+  }
+
+  const decoded = verifyToken(token)
+  if (!decoded) {
+    return res.status(401).json({ error: 'Invalid or expired token' })
+  }
+
+  // 设置 SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+
+  // 发送连接成功消息
+  res.write('data: {"type":"connected","message":"Deployment history stream connected"}\n\n')
+
+  // 订阅部署历史
+  subscribeToDeploymentHistory(id, res)
+
+  // 保持连接
+  req.on('close', () => {
+    console.log(`[SSE] Deployment history client disconnected from ${id}`)
+  })
 })
 
 // Get environment variables

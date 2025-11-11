@@ -228,11 +228,12 @@ const deleteProgressModal = ref(null)
 const showSettings = ref(false)
 
 // 定时器引用，用于清理
-let historyRefreshInterval = null
+// （已全部移除轮询）
 
 // SSE 连接引用
 let logEventSource = null
 let projectStateEventSource = null
+let deploymentHistoryEventSource = null
 
 // 页面加载时获取项目详情
 onMounted(async () => {
@@ -247,15 +248,13 @@ onMounted(async () => {
   // 使用 SSE 实时获取日志（替代轮询）
   connectLogStream()
 
-  // 刷新部署历史每10秒
-  historyRefreshInterval = setInterval(loadDeploymentHistory, 10000)
+  // 使用 SSE 实时获取部署历史（替代轮询）
+  connectDeploymentHistoryStream()
 })
 
 // 组件卸载时清理定时器和 SSE 连接
 onUnmounted(() => {
-  if (historyRefreshInterval) clearInterval(historyRefreshInterval)
-
-  // 关闭 SSE 连接
+  // 关闭所有 SSE 连接
   if (logEventSource) {
     logEventSource.close()
     logEventSource = null
@@ -264,6 +263,11 @@ onUnmounted(() => {
   if (projectStateEventSource) {
     projectStateEventSource.close()
     projectStateEventSource = null
+  }
+
+  if (deploymentHistoryEventSource) {
+    deploymentHistoryEventSource.close()
+    deploymentHistoryEventSource = null
   }
 })
 
@@ -279,7 +283,6 @@ const loadProject = async () => {
     console.error('[ProjectDetail] Error details:', error.response?.data || error.message)
 
     // 清理所有定时器和连接
-    if (historyRefreshInterval) clearInterval(historyRefreshInterval)
     if (logEventSource) {
       logEventSource.close()
       logEventSource = null
@@ -287,6 +290,10 @@ const loadProject = async () => {
     if (projectStateEventSource) {
       projectStateEventSource.close()
       projectStateEventSource = null
+    }
+    if (deploymentHistoryEventSource) {
+      deploymentHistoryEventSource.close()
+      deploymentHistoryEventSource = null
     }
 
     // 只在首次加载时显示错误并跳转
@@ -444,7 +451,7 @@ const connectProjectStateStream = () => {
 
 const deploymentHistory = ref([])
 
-// 加载部署历史
+// 加载部署历史（初始加载）
 const loadDeploymentHistory = async () => {
   try {
     const response = await getDeploymentHistory(projectId)
@@ -453,10 +460,83 @@ const loadDeploymentHistory = async () => {
     }
   } catch (error) {
     console.error('Failed to load deployment history:', error)
-    // 如果项目不存在（404），停止定时器
-    if (error.response?.status === 404) {
-      if (historyRefreshInterval) clearInterval(historyRefreshInterval)
+  }
+}
+
+// 连接部署历史 SSE 流
+const connectDeploymentHistoryStream = () => {
+  // 如果已有连接，先关闭
+  if (deploymentHistoryEventSource) {
+    deploymentHistoryEventSource.close()
+  }
+
+  // 获取认证 token
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
+    console.error('[SSE] No auth token found for deployment history')
+    return
+  }
+
+  // 创建 SSE 连接
+  const url = `/api/projects/${projectId}/deployments/stream?token=${encodeURIComponent(token)}`
+  deploymentHistoryEventSource = new EventSource(url)
+
+  deploymentHistoryEventSource.onopen = () => {
+    console.log('[SSE] Deployment history stream connected')
+  }
+
+  deploymentHistoryEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      // 忽略连接消息
+      if (data.type === 'connected') {
+        return
+      }
+
+      // 新的部署完成
+      if (data.type === 'deployment.completed' && data.data) {
+        console.log('[SSE] New deployment completed:', data.data)
+
+        // 检查是否已存在该部署记录
+        const existingIndex = deploymentHistory.value.findIndex(d => d.id === data.data.id)
+
+        if (existingIndex !== -1) {
+          // 如果已存在，更新记录（状态可能从 building 变为 success/failed）
+          console.log('[SSE] Updating existing deployment:', data.data.id)
+          deploymentHistory.value[existingIndex] = data.data
+        } else {
+          // 如果不存在，添加到列表开头
+          console.log('[SSE] Adding new deployment:', data.data.id)
+          deploymentHistory.value.unshift(data.data)
+
+          // 限制历史记录数量（保留最近50条）
+          if (deploymentHistory.value.length > 50) {
+            deploymentHistory.value = deploymentHistory.value.slice(0, 50)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[SSE] Failed to parse deployment history data:', error)
     }
+  }
+
+  deploymentHistoryEventSource.onerror = (error) => {
+    console.error('[SSE] Deployment history connection error:', error)
+
+    // 连接失败，5秒后重试
+    if (deploymentHistoryEventSource) {
+      deploymentHistoryEventSource.close()
+      deploymentHistoryEventSource = null
+    }
+
+    setTimeout(() => {
+      // 只有在组件还在时才重连
+      if (!loading.value) {
+        console.log('[SSE] Attempting to reconnect deployment history stream...')
+        connectDeploymentHistoryStream()
+      }
+    }, 5000)
   }
 }
 
