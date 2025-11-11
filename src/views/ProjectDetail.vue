@@ -102,9 +102,29 @@
               class="history-item"
             >
               <div class="history-info">
-                <StatusBadge :status="deployment.status" />
-                <span class="history-time">{{ formatDate(deployment.timestamp) }}</span>
-                <span class="history-commit">{{ deployment.commit }}</span>
+                <!-- 第一行：状态、时间、部署原因 -->
+                <div>
+                  <StatusBadge :status="deployment.status" />
+                  <span class="history-time">{{ formatDate(deployment.timestamp) }}</span>
+
+                  <!-- 部署原因标签 -->
+                  <span v-if="deployment.reason" class="reason-badge" :class="`reason-${deployment.reason}`">
+                    {{ $t(`projectDetail.deployReasons.${deployment.reason}`) }}
+                  </span>
+                </div>
+
+                <!-- Commit信息 -->
+                <div v-if="deployment.commit || deployment.commitHash" class="commit-info">
+                  <span class="commit-hash" :title="deployment.commitHash || deployment.commit">
+                    📝 {{ deployment.commit || (deployment.commitHash && deployment.commitHash.substring(0, 7)) }}
+                  </span>
+                  <span v-if="deployment.commitMessage" class="commit-message" :title="deployment.commitMessage">
+                    {{ deployment.commitMessage }}
+                  </span>
+                  <span v-if="deployment.commitAuthor" class="commit-author">
+                    👤 {{ deployment.commitAuthor }}
+                  </span>
+                </div>
               </div>
               <button class="btn-link" @click="viewLogs(deployment.id)">
                 {{ $t('projectDetail.viewLogs') }}
@@ -354,7 +374,8 @@ const stopProject = async () => {
 const deploy = async () => {
   try {
     isDeploying.value = true
-    await apiDeployProject(projectId)
+    // 手动部署，传递reason为'manual'
+    await apiDeployProject(projectId, { reason: 'manual', triggeredBy: 'admin' })
     deploymentLogs.value.push({
       type: 'success',
       timestamp: Date.now(),
@@ -695,10 +716,18 @@ const saveEnvVars = async () => {
 
 .history-info {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   font-size: 13px;
   color: #2c3e50;
+  flex: 1;
+}
+
+.history-info > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .history-time {
@@ -710,6 +739,70 @@ const saveEnvVars = async () => {
   background: #f5f5f5;
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+/* 部署原因标签样式 */
+.reason-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.reason-manual {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.reason-initial {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.reason-push {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.reason-auto {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+/* Commit信息样式 */
+.commit-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 12px;
+}
+
+.commit-hash {
+  font-family: 'Consolas', monospace;
+  background: #f5f5f5;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: #2c3e50;
+  cursor: help;
+}
+
+.commit-message {
+  color: #34495e;
+  font-style: italic;
+  max-width: 400px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+
+.commit-author {
+  color: #7f8c8d;
+  font-size: 11px;
 }
 
 .env-description {

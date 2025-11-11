@@ -283,6 +283,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 router.post('/:id/deploy', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
+    const { reason = 'manual', triggeredBy = 'admin' } = req.body
+
     const projectConfig = new ProjectConfig(id)
     const project = projectConfig.read()
 
@@ -291,7 +293,7 @@ router.post('/:id/deploy', authMiddleware, async (req, res) => {
     }
 
     // Start deployment in background
-    deployProjectV3(id).catch(error => {
+    deployProjectV3(id, { reason, triggeredBy }).catch(error => {
       console.error('Deployment error:', error)
     })
 

@@ -62,8 +62,9 @@ export const createProject = async (data) => {
   return response
 }
 
-export const deployProject = async (id) => {
-  const response = await apiClient.post(`/projects/${id}/deploy`)
+export const deployProject = async (id, options = {}) => {
+  const { reason = 'manual', triggeredBy = 'admin' } = options
+  const response = await apiClient.post(`/projects/${id}/deploy`, { reason, triggeredBy })
   return response
 }
 

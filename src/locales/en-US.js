@@ -63,6 +63,7 @@ export default {
       building: 'Building',
       deploying: 'Deploying',
       running: 'Running',
+      success: 'Success',
       failed: 'Failed',
       stopped: 'Stopped',
       pending: 'Pending'
@@ -185,6 +186,18 @@ export default {
     deploymentHistory: 'Deployment History',
     noHistory: 'No deployment history yet',
     viewLogs: 'View Logs',
+    deployReason: 'Deploy Reason',
+    deployReasons: {
+      manual: 'Manual Deploy',
+      initial: 'Initial Deploy',
+      push: 'Push Deploy',
+      auto: 'Auto Deploy'
+    },
+    commitInfo: 'Commit Info',
+    commitHash: 'Commit Hash',
+    commitMessage: 'Commit Message',
+    commitAuthor: 'Author',
+    triggeredBy: 'Triggered By',
     envVars: 'Environment Variables',
     envVarsDesc: 'Configure environment variables for your project build',
     addVariable: 'Add Variable',

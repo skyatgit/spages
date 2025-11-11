@@ -63,6 +63,7 @@ export default {
       building: '构建中',
       deploying: '部署中',
       running: '运行中',
+      success: '成功',
       failed: '失败',
       stopped: '已停止',
       pending: '等待中'
@@ -185,6 +186,18 @@ export default {
     deploymentHistory: '部署历史',
     noHistory: '暂无部署历史',
     viewLogs: '查看日志',
+    deployReason: '部署原因',
+    deployReasons: {
+      manual: '手动部署',
+      initial: '初始部署',
+      push: '推送部署',
+      auto: '自动部署'
+    },
+    commitInfo: 'Commit 信息',
+    commitHash: 'Commit Hash',
+    commitMessage: 'Commit 消息',
+    commitAuthor: '提交者',
+    triggeredBy: '触发者',
     envVars: '环境变量',
     envVarsDesc: '为项目构建配置环境变量',
     addVariable: '添加变量',

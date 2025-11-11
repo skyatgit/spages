@@ -467,7 +467,8 @@ const addProject = async () => {
     if (response && response.project && response.project.id) {
       const projectId = response.project.id
 
-      deployProject(projectId).catch(err => {
+      // 首次部署，传递reason为'initial'
+      deployProject(projectId, { reason: 'initial', triggeredBy: 'admin' }).catch(err => {
         console.error('Deployment failed:', err)
       })
 

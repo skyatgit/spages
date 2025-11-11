@@ -83,8 +83,14 @@ class DeploymentLogger {
 
 /**
  * 部署项目 (V3 - 使用新目录结构)
+ * @param {string} projectId - 项目ID
+ * @param {object} options - 部署选项
+ * @param {string} options.reason - 部署原因：'manual'(手动部署) | 'push'(推送部署) | 'auto'(自动部署) | 'initial'(初始部署)
+ * @param {string} options.triggeredBy - 触发者信息
  */
-export async function deployProjectV3(projectId) {
+export async function deployProjectV3(projectId, options = {}) {
+  const { reason = 'manual', triggeredBy = 'admin' } = options
+
   const projectConfig = new ProjectConfig(projectId)
   const project = projectConfig.read()
 
@@ -103,7 +109,12 @@ export async function deployProjectV3(projectId) {
     timestamp: new Date().toISOString(),
     status: 'building',
     commit: null,
+    commitHash: null,
+    commitMessage: null,
+    commitAuthor: null,
     branch: project.branch,
+    reason: reason, // 部署原因
+    triggeredBy: triggeredBy, // 触发者
     logFile: `${deploymentId}.log`,
     duration: 0,
     startTime: Date.now()
@@ -125,6 +136,22 @@ export async function deployProjectV3(projectId) {
     logger.info('Step 1/6: Cloning repository...')
     await cloneRepository(project, paths, logger)
     logger.success('Repository cloned successfully')
+
+    // Get commit information
+    logger.info('Getting commit information...')
+    const commitInfo = await getLatestCommitInfo(paths.source, logger)
+    if (commitInfo) {
+      logger.info(`Commit: ${commitInfo.hash} - ${commitInfo.message}`)
+      logger.info(`Author: ${commitInfo.author}`)
+
+      // 更新部署记录中的commit信息
+      history.updateStatus(deploymentId, {
+        commit: commitInfo.hash.substring(0, 7), // 短hash
+        commitHash: commitInfo.hash, // 完整hash
+        commitMessage: commitInfo.message,
+        commitAuthor: commitInfo.author
+      })
+    }
 
     // Step 2: Detect framework
     logger.info('Step 2/6: Detecting framework...')
@@ -302,6 +329,47 @@ async function cloneRepository(project, paths, logger) {
 
     child.on('error', reject)
   })
+}
+
+/**
+ * 获取最新的commit信息
+ * @param {string} sourcePath - 源码目录
+ * @param {DeploymentLogger} logger - 日志记录器
+ * @returns {Promise<{hash: string, message: string, author: string, date: string}>}
+ */
+async function getLatestCommitInfo(sourcePath, logger) {
+  try {
+    // 获取最新commit的详细信息
+    // %H: 完整hash, %s: commit message, %an: author name, %ae: author email, %ai: author date
+    const gitCommand = 'git log -1 --pretty=format:"%H|%s|%an <%ae>|%ai"'
+
+    return new Promise((resolve, reject) => {
+      exec(gitCommand, { cwd: sourcePath }, (error, stdout, stderr) => {
+        if (error) {
+          logger.warn(`Failed to get commit info: ${error.message}`)
+          resolve(null)
+          return
+        }
+
+        const output = stdout.trim()
+        if (!output) {
+          resolve(null)
+          return
+        }
+
+        const [hash, message, author, date] = output.split('|')
+        resolve({
+          hash: hash || 'unknown',
+          message: message || 'No commit message',
+          author: author || 'Unknown',
+          date: date || new Date().toISOString()
+        })
+      })
+    })
+  } catch (error) {
+    logger.warn(`Error getting commit info: ${error.message}`)
+    return null
+  }
 }
 
 /**
