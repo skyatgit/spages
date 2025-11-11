@@ -70,13 +70,23 @@ const downloadLogs = () => {
   emit('download')
 }
 
+// 检查滚动条是否在底部（容差5px）
+const isScrollAtBottom = () => {
+  if (!logContainer.value) return false
+  const { scrollTop, scrollHeight, clientHeight } = logContainer.value
+  return scrollHeight - scrollTop - clientHeight < 5
+}
+
 // Auto-scroll to bottom when new logs arrive
 watch(() => props.logs, async () => {
-  if (props.autoScroll) {
-    await nextTick()
-    if (logContainer.value) {
-      logContainer.value.scrollTop = logContainer.value.scrollHeight
-    }
+  // 在日志更新前，检查滚动条是否在底部
+  const shouldScroll = isScrollAtBottom()
+
+  await nextTick()
+
+  // 只有当之前滚动条在底部时，才自动滚动到底部
+  if (shouldScroll && logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
   }
 }, { deep: true })
 </script>
