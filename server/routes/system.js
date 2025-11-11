@@ -10,6 +10,46 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 /**
+ * 获取所有可用的网络接口 IP 地址
+ */
+router.get('/network-interfaces', authMiddleware, (req, res) => {
+  try {
+    const interfaces = os.networkInterfaces()
+    const ipList = []
+
+    // 添加 localhost
+    ipList.push({
+      name: 'localhost',
+      address: 'localhost',
+      family: 'IPv4',
+      internal: true,
+      description: '本机访问'
+    })
+
+    // 遍历所有网络接口
+    for (const [name, ifaces] of Object.entries(interfaces)) {
+      for (const iface of ifaces) {
+        // 只返回 IPv4 地址
+        if (iface.family === 'IPv4') {
+          ipList.push({
+            name: name,
+            address: iface.address,
+            family: iface.family,
+            internal: iface.internal,
+            description: iface.internal ? '内部地址' : '局域网地址'
+          })
+        }
+      }
+    }
+
+    res.json({ interfaces: ipList })
+  } catch (error) {
+    console.error('Error fetching network interfaces:', error)
+    res.status(500).json({ error: 'Failed to fetch network interfaces' })
+  }
+})
+
+/**
  * 递归计算目录大小（以字节为单位）
  */
 function getDirectorySize(dirPath) {

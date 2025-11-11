@@ -237,7 +237,7 @@ router.get('/:id/state/stream', (req, res) => {
 // Create new project
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { name, accountId, repository, owner, repo, branch, port, buildCommand, outputDir } = req.body
+    const { name, accountId, repository, owner, repo, branch, serverHost, port, buildCommand, outputDir } = req.body
 
     // Validate required fields
     if (!name || !accountId || !repository || !owner || !repo || !branch || !port) {
@@ -275,6 +275,7 @@ router.post('/', authMiddleware, async (req, res) => {
       owner,
       repo,
       branch,
+      serverHost: serverHost || null, // 保存用户选择的服务器 IP
       port: parseInt(port),
       buildCommand: buildCommand || 'npm run build',
       outputDir: outputDir || 'dist',

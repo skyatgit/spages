@@ -109,6 +109,33 @@
             </div>
 
             <div class="form-group">
+              <label>{{ $t('addProject.serverHost') }}</label>
+              <div class="server-host-wrapper">
+                <select v-model="serverHost" class="form-select">
+                  <option v-if="networkInterfaces.length === 0" value="">{{ $t('common.loading') }}...</option>
+                  <option
+                    v-for="(iface, index) in networkInterfaces"
+                    :key="'iface-' + index"
+                    :value="iface.address"
+                  >
+                    {{ iface.address }} - {{ iface.description }}
+                    <template v-if="iface.name !== 'localhost'"> ({{ iface.name }})</template>
+                  </option>
+                </select>
+                <button
+                  class="refresh-btn"
+                  @click="loadNetworkInterfaces"
+                  type="button"
+                  :title="$t('addProject.refreshNetworkInterfaces')"
+                  :disabled="loadingNetworkInterfaces"
+                >
+                  🔄
+                </button>
+              </div>
+              <p class="help-text">{{ $t('addProject.serverHostHelp') }}</p>
+            </div>
+
+            <div class="form-group">
               <label>{{ $t('addProject.port') }}</label>
               <input
                 v-model.number="port"
@@ -145,6 +172,7 @@ import {
   getGithubBranches
 } from '@/api/github'
 import { checkProjectName, checkPort, createProject, deployProject, getNextAvailablePort } from '@/api/projects'
+import { getNetworkInterfaces } from '@/api/system'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -157,6 +185,8 @@ const selectedAccount = ref('') // Selected GitHub account ID
 const selectedRepo = ref(null)
 const projectName = ref('')
 const branch = ref('')
+const serverHost = ref('') // 选择的服务器 IP
+const networkInterfaces = ref([]) // 可用的网络接口列表
 const port = ref(3001)
 const branches = ref([])
 const loadingBranches = ref(false)
@@ -169,12 +199,16 @@ const projectNameAvailable = ref(false)
 let projectNameCheckTimer = null
 let portCheckTimer = null
 
+// 网络接口加载状态
+const loadingNetworkInterfaces = ref(false)
+
 const githubAccounts = ref([])
 const repositories = ref([])
 
 // 页面加载时检查是否已连接 GitHub
 onMounted(async () => {
   await loadGithubAccounts()
+  // 移除这里的 loadNetworkInterfaces，改为在需要时才加载
 })
 
 // 加载 GitHub 账号列表
@@ -194,6 +228,57 @@ const loadGithubAccounts = async () => {
   } catch (error) {
     console.error('Failed to load GitHub accounts:', error)
     isGithubConnected.value = false
+  }
+}
+
+// 加载网络接口列表（按需加载，每次都重新获取）
+const loadNetworkInterfaces = async () => {
+  // 如果正在加载，跳过
+  if (loadingNetworkInterfaces.value) {
+    console.log('[AddProject] Already loading network interfaces, skip')
+    return
+  }
+
+  // 每次都清空并重新加载
+  loadingNetworkInterfaces.value = true
+  networkInterfaces.value = []
+
+  try {
+    console.log('[AddProject] Loading network interfaces from API...')
+    const response = await getNetworkInterfaces()
+    console.log('[AddProject] Network interfaces response:', response)
+    networkInterfaces.value = response.interfaces || []
+    console.log('[AddProject] Network interfaces count:', networkInterfaces.value.length)
+    console.log('[AddProject] Network interfaces array:', JSON.stringify(networkInterfaces.value, null, 2))
+
+    // 默认选择第一个非内部地址（局域网 IP），但只在未选择时设置
+    if (!serverHost.value) {
+      const defaultInterface = networkInterfaces.value.find(iface => !iface.internal && iface.address !== 'localhost')
+      if (defaultInterface) {
+        serverHost.value = defaultInterface.address
+        console.log('[AddProject] Auto-selected default IP:', defaultInterface.address)
+      } else if (networkInterfaces.value.length > 0) {
+        serverHost.value = networkInterfaces.value[0].address
+        console.log('[AddProject] Auto-selected first IP:', networkInterfaces.value[0].address)
+      }
+    }
+    console.log('[AddProject] Final networkInterfaces.value:', networkInterfaces.value)
+  } catch (error) {
+    console.error('[AddProject] Failed to load network interfaces:', error)
+    console.error('[AddProject] Error details:', error.response?.data || error.message)
+    // 降级到 localhost
+    networkInterfaces.value = [{
+      name: 'localhost',
+      address: 'localhost',
+      family: 'IPv4',
+      internal: true,
+      description: '本机访问'
+    }]
+    if (!serverHost.value) {
+      serverHost.value = 'localhost'
+    }
+  } finally {
+    loadingNetworkInterfaces.value = false
   }
 }
 
@@ -237,6 +322,14 @@ watch(port, (newPort) => {
   portCheckTimer = setTimeout(() => {
     checkPortAvailability()
   }, 500)
+})
+
+// 监听选择的仓库变化，展开项目配置时加载网络接口
+watch(selectedRepo, (newRepo) => {
+  if (newRepo) {
+    console.log('[AddProject] Project config expanded, loading network interfaces...')
+    loadNetworkInterfaces()
+  }
 })
 
 const filteredRepos = computed(() => {
@@ -458,6 +551,7 @@ const addProject = async () => {
       owner,
       repo,
       branch: branch.value,
+      serverHost: serverHost.value, // 传递选择的服务器 IP
       port: port.value
     })
 
@@ -804,7 +898,20 @@ const formatFullDate = (dateString) => {
   margin-top: 5px;
 }
 
+.help-text {
+  color: #7f8c8d;
+  font-size: 12px;
+  margin-top: 5px;
+  margin-bottom: 0;
+}
+
 .branch-select-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.server-host-wrapper {
   display: flex;
   gap: 8px;
   align-items: center;

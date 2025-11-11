@@ -56,6 +56,32 @@
           </div>
 
           <div class="form-group">
+            <label>{{ $t('addProject.serverHost') }}</label>
+            <div class="server-host-wrapper">
+              <select v-model="formData.serverHost" class="form-select">
+                <option v-if="networkInterfaces.length === 0" value="">{{ $t('common.loading') }}...</option>
+                <option
+                  v-for="(iface, index) in networkInterfaces"
+                  :key="'iface-' + index"
+                  :value="iface.address"
+                >
+                  {{ iface.address }} - {{ iface.description }}
+                  <template v-if="iface.name !== 'localhost'"> ({{ iface.name }})</template>
+                </option>
+              </select>
+              <button
+                class="refresh-btn"
+                @click="loadNetworkInterfaces"
+                type="button"
+                :title="$t('addProject.refreshNetworkInterfaces')"
+              >
+                🔄
+              </button>
+            </div>
+            <p class="help-text">{{ $t('addProject.serverHostHelp') }}</p>
+          </div>
+
+          <div class="form-group">
             <label>{{ $t('dashboard.port') }}</label>
             <input
               v-model.number="formData.port"
@@ -104,10 +130,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getGithubBranches } from '@/api/github'
 import { checkPort as apiCheckPort } from '@/api/projects'
+import { getNetworkInterfaces } from '@/api/system'
 
 const { t } = useI18n()
 
@@ -128,6 +155,7 @@ const formData = ref({
   name: '',
   repository: '',
   branch: 'main',
+  serverHost: '',
   port: 3000,
   buildCommand: 'npm run build',
   outputDir: 'dist'
@@ -135,6 +163,7 @@ const formData = ref({
 
 const branches = ref([])
 const loadingBranches = ref(false)
+const networkInterfaces = ref([])
 const portError = ref('')
 const portChecking = ref(false)
 const portAvailable = ref(false)
@@ -209,12 +238,36 @@ const loadBranches = async () => {
   }
 }
 
+// 加载网络接口列表（按需加载，每次都重新获取）
+const loadNetworkInterfaces = async () => {
+  try {
+    console.log('[EditProjectModal] Loading network interfaces from API...')
+    const response = await getNetworkInterfaces()
+    console.log('[EditProjectModal] Network interfaces response:', response)
+    networkInterfaces.value = response.interfaces || []
+    console.log('[EditProjectModal] Network interfaces count:', networkInterfaces.value.length)
+    console.log('[EditProjectModal] Network interfaces array:', JSON.stringify(networkInterfaces.value, null, 2))
+    console.log('[EditProjectModal] Final networkInterfaces.value:', networkInterfaces.value)
+  } catch (error) {
+    console.error('[EditProjectModal] Failed to load network interfaces:', error)
+    console.error('[EditProjectModal] Error details:', error.response?.data || error.message)
+    networkInterfaces.value = [{
+      name: 'localhost',
+      address: 'localhost',
+      family: 'IPv4',
+      internal: true,
+      description: '本机访问'
+    }]
+  }
+}
+
 watch(() => props.project, (newProject) => {
-  if (newProject) {
+  if (newProject && newProject.id) { // 添加 id 检查，确保项目数据完整
     formData.value = {
       name: newProject.name || '',
       repository: newProject.repository || '',
       branch: newProject.branch || 'main',
+      serverHost: newProject.serverHost || '',
       port: newProject.port || 3000,
       buildCommand: newProject.buildCommand || 'npm run build',
       outputDir: newProject.outputDir || 'dist'
@@ -227,8 +280,13 @@ watch(() => props.project, (newProject) => {
     portChecking.value = false
     // 加载分支列表
     loadBranches()
+    // 加载网络接口列表
+    console.log('[EditProjectModal] Modal opened, loading network interfaces...')
+    loadNetworkInterfaces()
   }
 }, { immediate: true })
+
+// 移除 onMounted，改为在下拉框获得焦点时加载
 
 const handleCancel = () => {
   emit('update:modelValue', false)
@@ -405,7 +463,20 @@ const handleSave = () => {
   margin-bottom: 0;
 }
 
+.help-text {
+  color: #7f8c8d;
+  font-size: 12px;
+  margin-top: 5px;
+  margin-bottom: 0;
+}
+
 .branch-select-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.server-host-wrapper {
   display: flex;
   gap: 8px;
   align-items: center;

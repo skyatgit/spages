@@ -34,15 +34,29 @@ const deploymentHistorySubscribers = new Map() // projectId -> Set of response o
 
 /**
  * 获取服务器访问地址
- * 优先级：环境变量 > 自动检测局域网 IP > localhost
+ * 优先级：项目配置 > 环境变量 > 自动检测局域网 IP > localhost
+ * @param {string} projectId - 项目ID（可选）
  */
-function getServerHost() {
-  // 1. 优先使用环境变量（适用于生产环境）
+function getServerHost(projectId = null) {
+  // 1. 如果提供了项目ID，优先使用项目配置的 serverHost
+  if (projectId) {
+    try {
+      const projectConfig = new ProjectConfig(projectId)
+      const project = projectConfig.read()
+      if (project && project.serverHost) {
+        return project.serverHost
+      }
+    } catch (error) {
+      // 项目配置读取失败，继续其他方式
+    }
+  }
+
+  // 2. 使用环境变量（适用于生产环境）
   if (process.env.SERVER_HOST) {
     return process.env.SERVER_HOST
   }
 
-  // 2. 自动检测局域网 IP（优先获取局域网 IP）
+  // 3. 自动检测局域网 IP（优先获取局域网 IP）
   const interfaces = os.networkInterfaces()
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
@@ -53,7 +67,7 @@ function getServerHost() {
     }
   }
 
-  // 3. 降级到 localhost
+  // 4. 降级到 localhost
   return 'localhost'
 }
 
@@ -278,7 +292,7 @@ export async function deployProjectV3(projectId, options = {}) {
 
     // Update status to running and broadcast
     const duration = Date.now() - deployment.startTime
-    const serverHost = getServerHost()
+    const serverHost = getServerHost(projectId) // 传入 projectId
     const url = `http://${serverHost}:${project.port}`
 
     updateAndBroadcastProjectState(projectId, {
@@ -665,7 +679,7 @@ export async function startServerV3(projectId) {
   console.log(`[startServerV3] Server started successfully on port ${project.port}`)
 
   // 获取服务器地址并生成 URL
-  const serverHost = getServerHost()
+  const serverHost = getServerHost(projectId) // 传入 projectId
   const url = `http://${serverHost}:${project.port}`
 
   // 更新项目状态并广播（让前端实时收到更新）
