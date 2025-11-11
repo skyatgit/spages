@@ -33,6 +33,31 @@ const allProjectsStateSubscribers = new Set() // Set of response objects (所有
 const deploymentHistorySubscribers = new Map() // projectId -> Set of response objects (部署历史)
 
 /**
+ * 获取服务器访问地址
+ * 优先级：环境变量 > 自动检测局域网 IP > localhost
+ */
+function getServerHost() {
+  // 1. 优先使用环境变量（适用于生产环境）
+  if (process.env.SERVER_HOST) {
+    return process.env.SERVER_HOST
+  }
+
+  // 2. 自动检测局域网 IP（优先获取局域网 IP）
+  const interfaces = os.networkInterfaces()
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // 跳过内部地址和 IPv6
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address
+      }
+    }
+  }
+
+  // 3. 降级到 localhost
+  return 'localhost'
+}
+
+/**
  * 部署日志管理
  */
 class DeploymentLogger {
@@ -253,17 +278,20 @@ export async function deployProjectV3(projectId, options = {}) {
 
     // Update status to running and broadcast
     const duration = Date.now() - deployment.startTime
+    const serverHost = getServerHost()
+    const url = `http://${serverHost}:${project.port}`
+
     updateAndBroadcastProjectState(projectId, {
       status: 'running',
       lastDeploy: new Date().toISOString(),
-      url: `http://localhost:${project.port}`,
+      url: url,
       nodeVersion
     })
 
     history.updateStatus(deploymentId, {
       status: 'success',
       duration,
-      url: `http://localhost:${project.port}`
+      url: url
     })
 
     logger.success('✅ Deployment completed successfully!')
@@ -636,7 +664,19 @@ export async function startServerV3(projectId) {
 
   console.log(`[startServerV3] Server started successfully on port ${project.port}`)
 
-  return { success: true, message: 'Server started successfully' }
+  // 获取服务器地址并生成 URL
+  const serverHost = getServerHost()
+  const url = `http://${serverHost}:${project.port}`
+
+  // 更新项目状态并广播（让前端实时收到更新）
+  updateAndBroadcastProjectState(projectId, {
+    status: 'running',
+    url: url
+  })
+
+  console.log(`[startServerV3] Project accessible at: ${url}`)
+
+  return { success: true, message: 'Server started successfully', url }
 }
 
 /**
