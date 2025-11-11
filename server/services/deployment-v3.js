@@ -924,6 +924,32 @@ export function broadcastProjectState(projectId, stateData) {
 }
 
 /**
+ * 广播项目删除事件到所有订阅者
+ */
+export function broadcastProjectDeleted(projectId) {
+  console.log(`[SSE] Broadcasting project deleted: ${projectId}`)
+
+  // 广播到所有项目列表的订阅者
+  if (allProjectsStateSubscribers.size > 0) {
+    const message = `data: ${JSON.stringify({ type: 'project.deleted', projectId })}\n\n`
+    for (const res of allProjectsStateSubscribers) {
+      try {
+        res.write(message)
+      } catch (error) {
+        console.error(`[SSE] Failed to send delete event to subscriber:`, error.message)
+        allProjectsStateSubscribers.delete(res)
+      }
+    }
+  }
+
+  // 清理该项目的订阅者（如果有）
+  const projectSubscribers = projectStateSubscribers.get(projectId)
+  if (projectSubscribers) {
+    projectStateSubscribers.delete(projectId)
+  }
+}
+
+/**
  * 订阅单个项目状态
  */
 export function subscribeToProjectState(projectId, res) {

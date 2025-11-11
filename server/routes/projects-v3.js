@@ -10,7 +10,8 @@ import {
   getProjectRealStatus,
   subscribeToLogs,
   subscribeToProjectState,
-  subscribeToAllProjectsState
+  subscribeToAllProjectsState,
+  broadcastProjectDeleted
 } from '../services/deployment-v3.js'
 import {
   ProjectPaths,
@@ -372,6 +373,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     // Delete from index
     projectIndex.delete(id)
+
+    console.log('[Delete Project] Broadcasting delete event...')
+
+    // 广播项目删除事件到所有 SSE 订阅者
+    broadcastProjectDeleted(id)
 
     console.log('[Delete Project] Project deleted successfully')
 

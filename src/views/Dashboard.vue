@@ -123,6 +123,13 @@ const connectProjectsStateStream = () => {
           // 新项目（不太可能在这里出现，但以防万一）
           projects.value.push({ id: data.projectId, ...data.data })
         }
+      } else if (data.type === 'project.deleted') {
+        // 项目被删除
+        console.log('[SSE] Project deleted:', data.projectId)
+        const index = projects.value.findIndex(p => p.id === data.projectId)
+        if (index !== -1) {
+          projects.value.splice(index, 1)
+        }
       }
     } catch (error) {
       console.error('[SSE] Failed to parse projects state data:', error)
