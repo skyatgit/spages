@@ -452,6 +452,10 @@ const stopProject = async () => {
 const deploy = async () => {
   try {
     isDeploying.value = true
+
+    // 清空旧日志，避免新旧日志混在一起
+    deploymentLogs.value = []
+
     // 手动部署，传递reason为'manual'
     await apiDeployProject(projectId, { reason: 'manual', triggeredBy: 'admin' })
     deploymentLogs.value.push({
