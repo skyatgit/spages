@@ -1,0 +1,233 @@
+# SPages 项目 AI 助手规则
+
+## 项目信息
+
+**项目名称：** SPages
+**项目类型：** 前端项目部署管理平台
+**技术栈：** Vue 3 + Express + Node.js
+**语言要求：** 始终使用中文与用户交流
+
+## 核心规则
+
+### 1. 通用规则
+
+- **语言：** 始终使用中文回复和交流
+- **行动优先：** 能做就做，不要问不必要的问题
+- **完整执行：** 必须完成任务后再结束，不要中途停止
+- **不生成 Markdown 文档：** 除非用户明确要求，否则不要生成文档
+
+### 2. 文档管理规范
+
+**重要：** 项目有严格的文档管理规则
+
+- ✅ **项目根目录** - 只允许 `README.md`
+- ✅ **docs/ 目录** - 所有其他技术文档必须放在这里
+- ✅ **docs/ 目录被 Git 忽略** - 不会提交到仓库
+
+**执行规则：**
+- 创建任何技术文档时，自动放入 `docs/` 目录
+- 不要在项目根目录创建除 `README.md` 外的其他文档
+- 详见：`docs/DOCUMENTATION_RULES.md`
+
+### 3. 代码编辑规范
+
+- **使用 replace_string_in_file 优先** - 精确替换代码
+- **使用 insert_edit_into_file 作为备选** - 当 replace 失败时使用
+- **避免重复代码** - 使用 `// ...existing code...` 表示未改动的代码
+- **每次编辑后验证** - 使用 `get_errors` 检查语法错误
+- **批量编辑** - 同一文件的多处修改尽量在一次工具调用中完成
+
+### 4. 技术栈约定
+
+#### 前端（Vue 3）
+- 使用 Composition API
+- 使用 `<script setup>` 语法
+- 使用 Vue Router 4
+- 使用 Vue I18n 进行国际化
+- 不使用 UI 框架，使用纯 CSS
+
+#### 后端（Express）
+- 使用 ES6 模块（import/export）
+- 使用 async/await 处理异步
+- 所有 API 路由以 `/api` 开头
+- 使用 JWT 进行认证
+- 使用 JSON 文件存储配置和数据
+
+#### 项目结构
+```
+spages/
+├── README.md           # 唯一允许在根目录的文档
+├── docs/               # 所有技术文档（被 Git 忽略）
+├── src/                # Vue 前端源码
+│   ├── views/          # 页面组件
+│   ├── components/     # 可复用组件
+│   ├── api/            # API 接口
+│   ├── router/         # 路由配置
+│   ├── locales/        # 国际化
+│   └── utils/          # 工具函数
+├── server/             # Express 后端
+│   ├── routes/         # 路由
+│   ├── services/       # 业务逻辑
+│   └── utils/          # 工具函数
+├── data/               # 配置和数据（被 Git 忽略）
+├── projects/           # 项目文件（被 Git 忽略）
+└── runtime/            # 运行时文件（被 Git 忽略）
+```
+
+### 5. 代码风格
+
+- **缩进：** 2 空格
+- **引号：** 单引号
+- **分号：** 不强制要求
+- **命名：** camelCase（函数、变量）、PascalCase（组件、类）
+- **注释：** 复杂逻辑必须添加中文注释
+
+### 6. Git 规范
+
+**被忽略的目录（不要修改这些目录的 .gitignore 状态）：**
+- `data/` - 配置和数据
+- `runtime/` - 运行时文件
+- `projects/` - 用户项目
+- `docs/` - 技术文档
+- `node_modules/` - 依赖包
+- `dist/` - 构建产物
+
+### 7. API 设计规范
+
+**路由规则：**
+- 所有 API 以 `/api` 开头
+- RESTful 风格：GET（查询）、POST（创建）、PUT（更新）、DELETE（删除）
+- 认证路由：`/api/auth/*`
+- 项目路由：`/api/projects/*`
+- GitHub 路由：`/api/github/*`
+- 系统路由：`/api/system/*`
+
+**响应格式：**
+```javascript
+// 成功
+{ success: true, data: {...} }
+
+// 失败
+{ success: false, error: "错误信息" }
+```
+
+### 8. 部署相关
+
+**部署服务：**
+- 使用 `deployment-v3.js` 作为主要部署服务
+- 自动检测项目框架（Vue、React、Next.js 等）
+- 自动管理 Node.js 版本
+- 使用 SSE 实时推送部署日志
+
+**项目目录结构：**
+```
+projects/
+  └── {projectName}/
+      ├── .spages/
+      │   ├── config.json       # 项目配置
+      │   ├── deployments.json  # 部署历史
+      │   ├── env.json          # 环境变量
+      │   └── logs/             # 部署日志
+      └── source/               # 源码目录
+```
+
+### 9. 特殊功能
+
+**SSE 实时日志：**
+- 项目详情页使用 SSE 接收实时日志
+- 不使用轮询方式
+- 路由：`GET /api/projects/:id/logs/stream`
+- 详见：`docs/SSE_IMPLEMENTATION_SUMMARY.md`
+
+**框架检测：**
+- 自动检测 10+ 种主流前端框架
+- 自动配置构建命令和输出目录
+- 详见：`server/services/framework-detector.js`
+
+**Node 版本管理：**
+- 自动检测项目需要的 Node 版本
+- 自动下载和安装所需版本
+- 支持多版本共存
+- 详见：`server/services/node-manager.js`
+
+## 开发命令
+
+```bash
+# 开发模式（前端 + 后端）
+npm run dev:all
+
+# 仅前端
+npm run dev
+
+# 仅后端
+npm run dev:server
+
+# 构建
+npm run build
+
+# 生产环境
+npm run preview:all
+```
+
+## 注意事项
+
+### ⚠️ 重要提醒
+
+1. **文档管理** - 除 README.md 外，所有文档必须放在 `docs/` 目录
+2. **中文优先** - 始终使用中文交流和编写注释
+3. **行动优先** - 能做就做，不要问用户"是否要..."
+4. **完整执行** - 一次性完成任务，不要分步骤询问
+5. **验证修改** - 修改代码后必须检查错误
+
+### 🚫 禁止操作
+
+1. 不要在根目录创建除 `README.md` 外的文档
+2. 不要修改 `.gitignore` 中已忽略的目录
+3. 不要删除或修改 `data/` 目录下的配置文件
+4. 不要在生产环境日志中输出敏感信息
+5. 不要使用轮询方式获取日志（使用 SSE）
+
+### ✅ 推荐操作
+
+1. 修改代码前先阅读相关文件
+2. 使用 `get_errors` 验证修改
+3. 复杂功能先查看现有实现
+4. 添加必要的中文注释
+5. 保持代码风格一致
+
+## 快速参考
+
+### 关键文件
+
+- `server/services/deployment-v3.js` - 部��服务（主要）
+- `server/services/framework-detector.js` - 框架检测
+- `server/services/node-manager.js` - Node 版本管理
+- `server/services/project-manager.js` - 项目管理
+- `server/routes/projects-v3.js` - 项目 API 路由
+- `src/views/ProjectDetail.vue` - 项目详情页（SSE 日志）
+- `docs/DOCUMENTATION_RULES.md` - 文档管理规范
+
+### 常用组件
+
+- `Layout.vue` - 页面布局
+- `ProjectCard.vue` - 项目卡片
+- `LogViewer.vue` - 日志查看器
+- `StatusBadge.vue` - 状态徽章
+- `Toast.vue` - 消息提示
+
+---
+
+**最后更新：** 2025-11-12
+**版本：** 1.0
+**维护者：** AI Assistant
+
+## 补充说明
+
+此文件是给 AI 助手看的项目规则文件。遵循这些规则可以：
+- 保持项目结构整洁
+- 提高代码质量和一致性
+- 避免常见错误
+- 提升开发效率
+
+如需更新规则，请直接修改此文件。
+
