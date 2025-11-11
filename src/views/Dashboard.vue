@@ -61,28 +61,91 @@ const loading = ref(true)
 const showDeleteProgress = ref(false)
 const deleteProgressModal = ref(null)
 
+// SSE 连接引用
+let projectsStateEventSource = null
+
 // 页面加载时获取项目列表
 onMounted(async () => {
   await loadProjects()
 
-  // 启动自动刷新（每5秒刷新一次状态）
-  const refreshInterval = setInterval(async () => {
-    // 静默刷新，不显示 loading
-    try {
-      const projectList = await projectsAPI.getProjects()
-      projects.value = projectList
-    } catch (error) {
-      console.error('Failed to refresh projects:', error)
-    }
-  }, 5000)
-
-  // 组件卸载时清除定时器
-  onUnmounted(() => {
-    clearInterval(refreshInterval)
-  })
+  // 使用 SSE 实时获取项目状态（替代轮询）
+  connectProjectsStateStream()
 })
 
-// 加载项目列表
+// 组件卸载时清理 SSE 连接
+onUnmounted(() => {
+  if (projectsStateEventSource) {
+    projectsStateEventSource.close()
+    projectsStateEventSource = null
+  }
+})
+
+// 连接项目状态 SSE 流
+const connectProjectsStateStream = () => {
+  // 如果已有连接，先关闭
+  if (projectsStateEventSource) {
+    projectsStateEventSource.close()
+  }
+
+  // 获取认证 token
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
+    console.error('[SSE] No auth token found')
+    return
+  }
+
+  // 创建 SSE 连接
+  const url = `/api/projects/state/stream?token=${encodeURIComponent(token)}`
+  projectsStateEventSource = new EventSource(url)
+
+  projectsStateEventSource.onopen = () => {
+    console.log('[SSE] Projects state stream connected')
+  }
+
+  projectsStateEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      // 处理不同类型的消息
+      if (data.type === 'connected') {
+        // 连接成功消息，忽略
+        return
+      } else if (data.type === 'initial') {
+        // 初始项目列表
+        projects.value = data.data
+      } else if (data.type === 'project.update') {
+        // 单个项目更新
+        const index = projects.value.findIndex(p => p.id === data.projectId)
+        if (index !== -1) {
+          // 更新现有项目
+          projects.value[index] = { ...projects.value[index], ...data.data }
+        } else {
+          // 新项目（不太可能在这里出现，但以防万一）
+          projects.value.push({ id: data.projectId, ...data.data })
+        }
+      }
+    } catch (error) {
+      console.error('[SSE] Failed to parse projects state data:', error)
+    }
+  }
+
+  projectsStateEventSource.onerror = (error) => {
+    console.error('[SSE] Projects state connection error:', error)
+
+    // 连接失败，5秒后重试
+    if (projectsStateEventSource) {
+      projectsStateEventSource.close()
+      projectsStateEventSource = null
+    }
+
+    setTimeout(() => {
+      console.log('[SSE] Attempting to reconnect projects state stream...')
+      connectProjectsStateStream()
+    }, 5000)
+  }
+}
+
+// 加载项目列表（初始加载）
 const loadProjects = async () => {
   loading.value = true
   try {

@@ -228,11 +228,11 @@ const deleteProgressModal = ref(null)
 const showSettings = ref(false)
 
 // 定时器引用，用于清理
-let projectRefreshInterval = null
 let historyRefreshInterval = null
 
 // SSE 连接引用
 let logEventSource = null
+let projectStateEventSource = null
 
 // 页面加载时获取项目详情
 onMounted(async () => {
@@ -241,8 +241,8 @@ onMounted(async () => {
   await loadDeploymentHistory()
   await loadEnvVars()
 
-  // 自动刷新状态每5秒
-  projectRefreshInterval = setInterval(loadProject, 5000)
+  // 使用 SSE 实时获取项目状态（替代轮询）
+  connectProjectStateStream()
 
   // 使用 SSE 实时获取日志（替代轮询）
   connectLogStream()
@@ -253,13 +253,17 @@ onMounted(async () => {
 
 // 组件卸载时清理定时器和 SSE 连接
 onUnmounted(() => {
-  if (projectRefreshInterval) clearInterval(projectRefreshInterval)
   if (historyRefreshInterval) clearInterval(historyRefreshInterval)
 
   // 关闭 SSE 连接
   if (logEventSource) {
     logEventSource.close()
     logEventSource = null
+  }
+
+  if (projectStateEventSource) {
+    projectStateEventSource.close()
+    projectStateEventSource = null
   }
 })
 
@@ -275,11 +279,14 @@ const loadProject = async () => {
     console.error('[ProjectDetail] Error details:', error.response?.data || error.message)
 
     // 清理所有定时器和连接
-    if (projectRefreshInterval) clearInterval(projectRefreshInterval)
     if (historyRefreshInterval) clearInterval(historyRefreshInterval)
     if (logEventSource) {
       logEventSource.close()
       logEventSource = null
+    }
+    if (projectStateEventSource) {
+      projectStateEventSource.close()
+      projectStateEventSource = null
     }
 
     // 只在首次加载时显示错误并跳转
@@ -371,6 +378,65 @@ const connectLogStream = () => {
       if (!loading.value) {
         console.log('[SSE] Attempting to reconnect...')
         connectLogStream()
+      }
+    }, 5000)
+  }
+}
+
+// 连接项目状态 SSE 流
+const connectProjectStateStream = () => {
+  // 如果已有连接，先关闭
+  if (projectStateEventSource) {
+    projectStateEventSource.close()
+  }
+
+  // 获取认证 token
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
+    console.error('[SSE] No auth token found for project state')
+    return
+  }
+
+  // 创建 SSE 连接
+  const url = `/api/projects/${projectId}/state/stream?token=${encodeURIComponent(token)}`
+  projectStateEventSource = new EventSource(url)
+
+  projectStateEventSource.onopen = () => {
+    console.log('[SSE] Project state stream connected')
+  }
+
+  projectStateEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      // 忽略连接消息
+      if (data.type === 'connected') {
+        return
+      }
+
+      // 更新项目状态
+      if (data.type === 'state' && data.data) {
+        project.value = { ...project.value, ...data.data }
+      }
+    } catch (error) {
+      console.error('[SSE] Failed to parse project state data:', error)
+    }
+  }
+
+  projectStateEventSource.onerror = (error) => {
+    console.error('[SSE] Project state connection error:', error)
+
+    // 连接失败，5秒后重试
+    if (projectStateEventSource) {
+      projectStateEventSource.close()
+      projectStateEventSource = null
+    }
+
+    setTimeout(() => {
+      // 只有在组件还在时才重连
+      if (!loading.value) {
+        console.log('[SSE] Attempting to reconnect project state stream...')
+        connectProjectStateStream()
       }
     }, 5000)
   }

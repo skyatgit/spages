@@ -26,8 +26,10 @@ const runningProcesses = new Map()
 const serverConnections = new Map() // 存储每个服务器的活动连接
 const deployingProjects = new Map() // 存储正在部署的项目 ID
 
-// SSE 日志订阅管理
+// SSE 订阅管理
 const logSubscribers = new Map() // projectId -> Set of response objects
+const projectStateSubscribers = new Map() // projectId -> Set of response objects (单个项目状态)
+const allProjectsStateSubscribers = new Set() // Set of response objects (所有项目状态)
 
 /**
  * 部署日志管理
@@ -137,9 +139,8 @@ export async function deployProjectV3(projectId, options = {}) {
     // 标记为部署中
     deployingProjects.set(projectId, true)
 
-    // Update status to building
-    projectConfig.update({ status: 'building' })
-    projectIndex.update(projectId, { status: 'building' })
+    // Update status to building and broadcast
+    updateAndBroadcastProjectState(projectId, { status: 'building' })
 
     // Step 1: Clone repository
     logger.info('Step 1/6: Cloning repository...')
@@ -246,19 +247,13 @@ export async function deployProjectV3(projectId, options = {}) {
     await startServer(project, paths, nodeVersion, logger, frameworkInfo)
     logger.success(`Server started on port ${project.port}`)
 
-    // Update status to running
+    // Update status to running and broadcast
     const duration = Date.now() - deployment.startTime
-    projectConfig.update({
+    updateAndBroadcastProjectState(projectId, {
       status: 'running',
       lastDeploy: new Date().toISOString(),
       url: `http://localhost:${project.port}`,
       nodeVersion
-    })
-
-    projectIndex.update(projectId, {
-      status: 'running',
-      lastDeploy: new Date().toISOString(),
-      url: `http://localhost:${project.port}`
     })
 
     history.updateStatus(deploymentId, {
@@ -282,8 +277,7 @@ export async function deployProjectV3(projectId, options = {}) {
     deployingProjects.delete(projectId)
 
     const duration = Date.now() - deployment.startTime
-    projectConfig.update({ status: 'failed' })
-    projectIndex.update(projectId, { status: 'failed' })
+    updateAndBroadcastProjectState(projectId, { status: 'failed' })
 
     history.updateStatus(deploymentId, {
       status: 'failed',
@@ -662,11 +656,22 @@ export function stopServerV3(projectId) {
 
       // 立即从 map 中删除
       runningProcesses.delete(projectId)
+
+      // 广播状态变化为 stopped
+      updateAndBroadcastProjectState(projectId, {
+        status: 'stopped',
+        url: null
+      })
+
       return true
     } catch (error) {
       console.error(`[stopServerV3] Error stopping server: ${error.message}`)
       // 即使出错也删除引用，避免泄漏
       runningProcesses.delete(projectId)
+
+      // 广播状态变化
+      updateAndBroadcastProjectState(projectId, { status: 'stopped' })
+
       return false
     }
   } else {
@@ -885,3 +890,108 @@ export function unsubscribeFromLogs(projectId, res) {
     }
   }
 }
+
+/**
+ * 广播项目状态变化到所有订阅者
+ */
+export function broadcastProjectState(projectId, stateData) {
+  // 1. 广播到单个项目的订阅者
+  const projectSubscribers = projectStateSubscribers.get(projectId)
+  if (projectSubscribers && projectSubscribers.size > 0) {
+    const message = `data: ${JSON.stringify({ type: 'state', data: stateData })}\n\n`
+    for (const res of projectSubscribers) {
+      try {
+        res.write(message)
+      } catch (error) {
+        console.error(`[SSE] Failed to send state to subscriber:`, error.message)
+        projectSubscribers.delete(res)
+      }
+    }
+  }
+
+  // 2. 广播到所有项目列表的订阅者
+  if (allProjectsStateSubscribers.size > 0) {
+    const message = `data: ${JSON.stringify({ type: 'project.update', projectId, data: stateData })}\n\n`
+    for (const res of allProjectsStateSubscribers) {
+      try {
+        res.write(message)
+      } catch (error) {
+        console.error(`[SSE] Failed to send state to all-projects subscriber:`, error.message)
+        allProjectsStateSubscribers.delete(res)
+      }
+    }
+  }
+}
+
+/**
+ * 订阅单个项目状态
+ */
+export function subscribeToProjectState(projectId, res) {
+  if (!projectStateSubscribers.has(projectId)) {
+    projectStateSubscribers.set(projectId, new Set())
+  }
+
+  projectStateSubscribers.get(projectId).add(res)
+  console.log(`[SSE] New project state subscriber for ${projectId}, total: ${projectStateSubscribers.get(projectId).size}`)
+
+  res.on('close', () => {
+    const subscribers = projectStateSubscribers.get(projectId)
+    if (subscribers) {
+      subscribers.delete(res)
+      console.log(`[SSE] Project state subscriber disconnected from ${projectId}, remaining: ${subscribers.size}`)
+
+      if (subscribers.size === 0) {
+        projectStateSubscribers.delete(projectId)
+      }
+    }
+  })
+}
+
+/**
+ * 订阅所有项目状态
+ */
+export function subscribeToAllProjectsState(res) {
+  allProjectsStateSubscribers.add(res)
+  console.log(`[SSE] New all-projects subscriber, total: ${allProjectsStateSubscribers.size}`)
+
+  res.on('close', () => {
+    allProjectsStateSubscribers.delete(res)
+    console.log(`[SSE] All-projects subscriber disconnected, remaining: ${allProjectsStateSubscribers.size}`)
+  })
+}
+
+/**
+ * 更新项目状态并广播（统一接口）
+ * @param {string} projectId - 项目ID
+ * @param {object} updates - 状态更新数据
+ */
+export function updateAndBroadcastProjectState(projectId, updates) {
+  const projectConfig = new ProjectConfig(projectId)
+  const project = projectConfig.read()
+
+  if (!project) {
+    console.error(`[SSE] Project not found: ${projectId}`)
+    return
+  }
+
+  // 更新配置
+  projectConfig.update(updates)
+
+  // 更新索引
+  projectIndex.update(projectId, {
+    ...updates,
+    updatedAt: new Date().toISOString()
+  })
+
+  // 广播状态变化
+  const stateData = {
+    id: projectId,
+    ...project,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  }
+
+  broadcastProjectState(projectId, stateData)
+  console.log(`[SSE] Broadcasted state update for project ${projectId}:`, updates)
+}
+

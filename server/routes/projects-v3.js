@@ -8,7 +8,9 @@ import {
   getDeploymentHistory,
   debugRunningProcesses,
   getProjectRealStatus,
-  subscribeToLogs
+  subscribeToLogs,
+  subscribeToProjectState,
+  subscribeToAllProjectsState
 } from '../services/deployment-v3.js'
 import {
   ProjectPaths,
@@ -106,6 +108,56 @@ router.get('/', authMiddleware, (req, res) => {
   }
 })
 
+// SSE: Real-time all projects state stream
+router.get('/state/stream', (req, res) => {
+  const { token } = req.query
+
+  // 验证 token
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' })
+  }
+
+  const decoded = verifyToken(token)
+  if (!decoded) {
+    return res.status(401).json({ error: 'Invalid or expired token' })
+  }
+
+  // 设置 SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+
+  // 发送连接成功消息
+  res.write('data: {"type":"connected","message":"Projects state stream connected"}\n\n')
+
+  // 订阅所有项目状态
+  subscribeToAllProjectsState(res)
+
+  // 发送当前所有项目状态
+  try {
+    const projects = projectIndex.getAll()
+    const projectList = Object.entries(projects).map(([id, project]) => {
+      const actualStatus = getProjectRealStatus(id)
+      return {
+        id,
+        ...project,
+        status: actualStatus
+      }
+    })
+
+    // 发送初始状态
+    res.write(`data: ${JSON.stringify({ type: 'initial', data: projectList })}\n\n`)
+  } catch (error) {
+    console.error('Error sending initial projects state:', error)
+  }
+
+  // 保持连接
+  req.on('close', () => {
+    console.log('[SSE] All-projects state client disconnected')
+  })
+})
+
 // Get single project (full details)
 router.get('/:id', authMiddleware, (req, res) => {
   try {
@@ -128,6 +180,56 @@ router.get('/:id', authMiddleware, (req, res) => {
     console.error('Error fetching project:', error)
     res.status(500).json({ error: 'Failed to fetch project' })
   }
+})
+
+// SSE: Real-time single project state stream
+router.get('/:id/state/stream', (req, res) => {
+  const { id } = req.params
+  const { token } = req.query
+
+  // 验证 token
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' })
+  }
+
+  const decoded = verifyToken(token)
+  if (!decoded) {
+    return res.status(401).json({ error: 'Invalid or expired token' })
+  }
+
+  // 设置 SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+
+  // 发送连接成功消息
+  res.write('data: {"type":"connected","message":"Project state stream connected"}\n\n')
+
+  // 订阅项目状态
+  subscribeToProjectState(id, res)
+
+  // 发送当前项目状态
+  try {
+    const projectConfig = new ProjectConfig(id)
+    const project = projectConfig.read()
+
+    if (project) {
+      const actualStatus = getProjectRealStatus(id)
+      const stateData = {
+        ...project,
+        status: actualStatus
+      }
+      res.write(`data: ${JSON.stringify({ type: 'state', data: stateData })}\n\n`)
+    }
+  } catch (error) {
+    console.error('Error sending initial project state:', error)
+  }
+
+  // 保持连接
+  req.on('close', () => {
+    console.log(`[SSE] Project state client disconnected from ${id}`)
+  })
 })
 
 // Create new project
