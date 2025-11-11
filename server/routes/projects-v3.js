@@ -1,5 +1,5 @@
 import express from 'express'
-import { authMiddleware } from '../utils/auth.js'
+import { authMiddleware, verifyToken } from '../utils/auth.js'
 import {
   deployProjectV3,
   startServerV3,
@@ -7,7 +7,8 @@ import {
   getDeploymentLogs,
   getDeploymentHistory,
   debugRunningProcesses,
-  getProjectRealStatus
+  getProjectRealStatus,
+  subscribeToLogs
 } from '../services/deployment-v3.js'
 import {
   ProjectPaths,
@@ -400,6 +401,56 @@ router.get('/:id/logs', authMiddleware, (req, res) => {
     console.error('Error fetching logs:', error)
     res.status(500).json({ error: 'Failed to fetch logs' })
   }
+})
+
+// SSE: Real-time log streaming
+router.get('/:id/logs/stream', (req, res) => {
+  const { id } = req.params
+  const { token } = req.query
+
+  // 从 URL 参数验证 token（因为 EventSource 不支持自定义 headers）
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' })
+  }
+
+  // 验证 token
+  const decoded = verifyToken(token)
+
+  if (!decoded) {
+    return res.status(401).json({ error: 'Invalid or expired token' })
+  }
+
+  // 设置 SSE 响应头
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no') // 禁用 Nginx 缓冲
+
+  // 发送初始连接成功消息
+  res.write('data: {"type":"connected","message":"Log stream connected"}\n\n')
+
+  // 订阅日志
+  subscribeToLogs(id, res)
+
+  // 发送历史日志（可选，如果需要在连接时发送最近的日志）
+  try {
+    const logs = getDeploymentLogs(id)
+    if (logs && logs.length > 0) {
+      // 只发送最近10条日志
+      const recentLogs = logs.slice(-10)
+      for (const log of recentLogs) {
+        const data = JSON.stringify(log)
+        res.write(`data: ${data}\n\n`)
+      }
+    }
+  } catch (error) {
+    console.error('Error sending historical logs:', error)
+  }
+
+  // 保持连接，直到客户端断开
+  req.on('close', () => {
+    console.log(`[SSE] Client disconnected from project ${id}`)
+  })
 })
 
 // Get deployment history for a project

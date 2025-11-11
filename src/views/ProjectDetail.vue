@@ -229,8 +229,10 @@ const showSettings = ref(false)
 
 // 定时器引用，用于清理
 let projectRefreshInterval = null
-let logsRefreshInterval = null
 let historyRefreshInterval = null
+
+// SSE 连接引用
+let logEventSource = null
 
 // 页面加载时获取项目详情
 onMounted(async () => {
@@ -241,17 +243,24 @@ onMounted(async () => {
 
   // 自动刷新状态每5秒
   projectRefreshInterval = setInterval(loadProject, 5000)
-  // 自动刷新日志每3秒
-  logsRefreshInterval = setInterval(loadLogs, 3000)
+
+  // 使用 SSE 实时获取日志（替代轮询）
+  connectLogStream()
+
   // 刷新部署历史每10秒
   historyRefreshInterval = setInterval(loadDeploymentHistory, 10000)
 })
 
-// 组件卸载时清理定时器
+// 组件卸载时清理定时器和 SSE 连接
 onUnmounted(() => {
   if (projectRefreshInterval) clearInterval(projectRefreshInterval)
-  if (logsRefreshInterval) clearInterval(logsRefreshInterval)
   if (historyRefreshInterval) clearInterval(historyRefreshInterval)
+
+  // 关闭 SSE 连接
+  if (logEventSource) {
+    logEventSource.close()
+    logEventSource = null
+  }
 })
 
 // 加载项目详情
@@ -265,10 +274,13 @@ const loadProject = async () => {
     console.error('[ProjectDetail] Failed to load project:', error)
     console.error('[ProjectDetail] Error details:', error.response?.data || error.message)
 
-    // 清理所有定时器
+    // 清理所有定时器和连接
     if (projectRefreshInterval) clearInterval(projectRefreshInterval)
-    if (logsRefreshInterval) clearInterval(logsRefreshInterval)
     if (historyRefreshInterval) clearInterval(historyRefreshInterval)
+    if (logEventSource) {
+      logEventSource.close()
+      logEventSource = null
+    }
 
     // 只在首次加载时显示错误并跳转
     if (loading.value) {
@@ -282,7 +294,7 @@ const loadProject = async () => {
 
 const deploymentLogs = ref([])
 
-// 加载部署日志
+// 加载部署日志（初始加载）
 const loadLogs = async () => {
   try {
     const response = await getProjectLogs(projectId)
@@ -291,10 +303,76 @@ const loadLogs = async () => {
     }
   } catch (error) {
     console.error('Failed to load logs:', error)
-    // 如果项目不存在（404），停止定时器
+    // 如果项目不存在（404），停止定时器和 SSE
     if (error.response?.status === 404) {
-      if (logsRefreshInterval) clearInterval(logsRefreshInterval)
+      if (historyRefreshInterval) clearInterval(historyRefreshInterval)
+      if (logEventSource) {
+        logEventSource.close()
+        logEventSource = null
+      }
     }
+  }
+}
+
+// 连接 SSE 日志流
+const connectLogStream = () => {
+  // 如果已有连接，先关闭
+  if (logEventSource) {
+    logEventSource.close()
+  }
+
+  // 获取认证 token
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
+    console.error('[SSE] No auth token found')
+    return
+  }
+
+  // 创建 SSE 连接（通过在 URL 中传递 token，因为 EventSource 不支持自定义 headers）
+  const url = `/api/projects/${projectId}/logs/stream?token=${encodeURIComponent(token)}`
+  logEventSource = new EventSource(url)
+
+  logEventSource.onopen = () => {
+    console.log('[SSE] Log stream connected')
+  }
+
+  logEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      // 忽略连接消息
+      if (data.type === 'connected') {
+        return
+      }
+
+      // 添加新日志到列表
+      deploymentLogs.value.push(data)
+
+      // 限制日志数量，避免内存溢出（保留最近1000条）
+      if (deploymentLogs.value.length > 1000) {
+        deploymentLogs.value = deploymentLogs.value.slice(-1000)
+      }
+    } catch (error) {
+      console.error('[SSE] Failed to parse log data:', error)
+    }
+  }
+
+  logEventSource.onerror = (error) => {
+    console.error('[SSE] Connection error:', error)
+
+    // 连接失败，5秒后重试
+    if (logEventSource) {
+      logEventSource.close()
+      logEventSource = null
+    }
+
+    setTimeout(() => {
+      // 只有在组件还在时才重连
+      if (!loading.value) {
+        console.log('[SSE] Attempting to reconnect...')
+        connectLogStream()
+      }
+    }, 5000)
   }
 }
 

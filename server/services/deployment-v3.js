@@ -26,13 +26,17 @@ const runningProcesses = new Map()
 const serverConnections = new Map() // 存储每个服务器的活动连接
 const deployingProjects = new Map() // 存储正在部署的项目 ID
 
+// SSE 日志订阅管理
+const logSubscribers = new Map() // projectId -> Set of response objects
+
 /**
  * 部署日志管理
  */
 class DeploymentLogger {
-  constructor(projectName, deploymentId) {
+  constructor(projectName, deploymentId, projectId = null) {
     this.projectName = projectName
     this.deploymentId = deploymentId
+    this.projectId = projectId
     this.logs = []
 
     const paths = new ProjectPaths(projectName)
@@ -52,6 +56,11 @@ class DeploymentLogger {
     const logLine = `[${timestamp}] [${type.toUpperCase()}] ${message}\n`
     this.stream.write(logLine)
     console.log(`[${this.projectName}]`, logLine.trim())
+
+    // 实时广播日志到所有订阅者
+    if (this.projectId) {
+      broadcastLog(this.projectId, logEntry)
+    }
 
     return logEntry
   }
@@ -100,7 +109,7 @@ export async function deployProjectV3(projectId, options = {}) {
 
   const paths = new ProjectPaths(project.name)
   const deploymentId = `deploy_${Date.now()}`
-  const logger = new DeploymentLogger(project.name, deploymentId)
+  const logger = new DeploymentLogger(project.name, deploymentId, projectId)
   const history = new DeploymentHistory(project.name)
 
   // 创建部署记录
@@ -810,5 +819,69 @@ export function getDeploymentHistory(projectId) {
   }
 
   const history = new DeploymentHistory(project.name)
-  return history.read().history
+  const data = history.read()
+  return data.history || []
+}
+
+/**
+ * 广播日志到所有订阅者
+ */
+function broadcastLog(projectId, logEntry) {
+  const subscribers = logSubscribers.get(projectId)
+  if (!subscribers || subscribers.size === 0) {
+    return
+  }
+
+  const data = JSON.stringify(logEntry)
+  const message = `data: ${data}\n\n`
+
+  // 发送给所有订阅者
+  for (const res of subscribers) {
+    try {
+      res.write(message)
+    } catch (error) {
+      // 连接已断开，从订阅者列表中移除
+      console.error(`[SSE] Failed to send log to subscriber:`, error.message)
+      subscribers.delete(res)
+    }
+  }
+}
+
+/**
+ * 添加日志订阅者
+ */
+export function subscribeToLogs(projectId, res) {
+  if (!logSubscribers.has(projectId)) {
+    logSubscribers.set(projectId, new Set())
+  }
+
+  logSubscribers.get(projectId).add(res)
+  console.log(`[SSE] New subscriber for project ${projectId}, total: ${logSubscribers.get(projectId).size}`)
+
+  // 当连接关闭时，移除订阅者
+  res.on('close', () => {
+    const subscribers = logSubscribers.get(projectId)
+    if (subscribers) {
+      subscribers.delete(res)
+      console.log(`[SSE] Subscriber disconnected from project ${projectId}, remaining: ${subscribers.size}`)
+
+      // 如果没有订阅者了，清理 Map
+      if (subscribers.size === 0) {
+        logSubscribers.delete(projectId)
+      }
+    }
+  })
+}
+
+/**
+ * 取消订阅
+ */
+export function unsubscribeFromLogs(projectId, res) {
+  const subscribers = logSubscribers.get(projectId)
+  if (subscribers) {
+    subscribers.delete(res)
+    if (subscribers.size === 0) {
+      logSubscribers.delete(projectId)
+    }
+  }
 }
