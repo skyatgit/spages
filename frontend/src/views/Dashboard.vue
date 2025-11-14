@@ -93,8 +93,8 @@ const connectProjectsStateStream = () => {
       const data = JSON.parse(event.data)
       if (data.type === 'connected') return
       if (data.type === 'initial') {
-        // 过滤掉没有 name 的项目
-        projects.value = (data.data || []).filter(p => p && p.id && p.name)
+        // 过滤掉没有 name 的项目，以及系统前端项目
+        projects.value = (data.data || []).filter(p => p && p.id && p.name && p.type !== 'core')
       } else if (data.type === 'project.update') {
         if (!data.data || !data.data.name) {
           console.warn('[SSE] 忽略无效项目更新（缺少 name）:', data)
@@ -125,7 +125,8 @@ const loadProjects = async () => {
   loading.value = true
   try {
     const projectList = await projectsAPI.getProjects()
-    projects.value = projectList
+    // 过滤掉系统前端项目
+    projects.value = projectList.filter(p => p.type !== 'core')
   } catch (error) {
     console.error('Failed to load projects:', error)
     await modal.alert(t('dashboard.loadProjectsFailed'))

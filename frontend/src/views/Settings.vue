@@ -64,6 +64,56 @@
           </button>
         </div>
 
+        <!-- System Frontend -->
+        <div class="settings-card" :class="{ 'card-success': systemFrontend.status === 'running', 'card-warning': systemFrontend.status !== 'running' }">
+          <div class="card-header-with-icon">
+            <span class="card-icon">{{ systemFrontend.status === 'running' ? '🚀' : '⚠️' }}</span>
+            <div>
+              <h2>{{ $t('settings.systemFrontend') }}</h2>
+              <p class="card-description">
+                {{ $t('settings.systemFrontendDesc') }}
+              </p>
+            </div>
+          </div>
+
+          <div class="info-list">
+            <div class="info-row">
+              <span class="info-label">{{ $t('settings.status') }}</span>
+              <StatusBadge v-if="systemFrontend.id" :status="systemFrontend.status" />
+              <span v-else class="info-value">{{ $t('common.loading') }}</span>
+            </div>
+            <div v-if="systemFrontend.port" class="info-row">
+              <span class="info-label">{{ $t('settings.port') }}</span>
+              <span class="info-value">{{ systemFrontend.port }}</span>
+            </div>
+            <div v-if="systemFrontend.url" class="info-row">
+              <span class="info-label">{{ $t('settings.url') }}</span>
+              <a :href="systemFrontend.url" target="_blank" class="info-value-link">{{ systemFrontend.url }}</a>
+            </div>
+            <div v-if="systemFrontend.lastDeploy" class="info-row">
+              <span class="info-label">{{ $t('settings.lastDeploy') }}</span>
+              <span class="info-value">{{ formatDate(systemFrontend.lastDeploy) }}</span>
+            </div>
+            <div v-if="systemFrontend.nodeVersion" class="info-row">
+              <span class="info-label">{{ $t('settings.nodeVersionUsed') }}</span>
+              <span class="info-value">v{{ systemFrontend.nodeVersion }}</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <button 
+              class="btn btn-primary" 
+              @click="redeploySystemFrontend"
+              :disabled="isRedeployingFrontend"
+            >
+              {{ isRedeployingFrontend ? '🔄 ' + $t('settings.redeploying') : '🔄 ' + $t('settings.redeploy') }}
+            </button>
+            <a v-if="systemFrontend.url" :href="systemFrontend.url" target="_blank" class="btn btn-secondary">
+              🔗 {{ $t('settings.visitSite') }}
+            </a>
+          </div>
+        </div>
+
         <!-- GitHub App Configuration -->
         <div class="settings-card" :class="{ 'card-warning': !githubAppConfigured, 'card-success': githubAppConfigured }">
           <div class="card-header-with-icon">
@@ -185,22 +235,36 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Layout from '@/components/Layout.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { useToast } from '@/utils/toast'
-import { getGithubAppConfig, deleteGithubAppConfig, getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount } from '@/api/github'
+import { getGithubAppConfig, deleteGithubAppConfig, getGithubInstallUrl, getGithubAccounts, removeGithubAccount } from '@/api/github'
 import { getSystemInfo } from '@/api/system'
 import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
+import { projectsAPI, deployProject } from '@/api/projects'
 
 const { t } = useI18n()
 const modal = useModal()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
+
+// 系统前端
+const systemFrontend = ref({
+  id: null,
+  status: 'loading',
+  port: null,
+  url: null,
+  lastDeploy: null,
+  nodeVersion: null
+})
+const isRedeployingFrontend = ref(false)
+let systemFrontendStateEventSource = null
 
 // 管理员凭据
 const currentPassword = ref('')
@@ -214,7 +278,6 @@ const orphanedApps = ref([]) // Unauthorized Apps
 const loadingAccounts = ref(false)
 const githubAppConfigured = ref(false)
 const githubAppInfo = ref({})
-
 
 // 系统信息
 const systemInfo = ref({
@@ -484,11 +547,124 @@ const removeApp = async (appId, username, appSlug) => {
   }
 }
 
+// 加载系统前端项目信息
+const loadSystemFrontend = async () => {
+  try {
+    console.log('[loadSystemFrontend] Loading projects...')
+    const projects = await projectsAPI.getProjects()
+    console.log('[loadSystemFrontend] Projects loaded:', projects)
+    console.log('[loadSystemFrontend] Projects count:', projects.length)
+    
+    const frontendProject = projects.find(p => p.type === 'core' && p.managed === true)
+    console.log('[loadSystemFrontend] Found frontend project:', frontendProject)
+    
+    if (frontendProject) {
+      systemFrontend.value = {
+        id: frontendProject.id,
+        status: frontendProject.status || 'stopped',
+        port: frontendProject.port,
+        url: frontendProject.url,
+        lastDeploy: frontendProject.lastDeploy,
+        nodeVersion: frontendProject.nodeVersion
+      }
+      console.log('[loadSystemFrontend] System frontend loaded:', systemFrontend.value)
+    } else {
+      console.warn('[loadSystemFrontend] System frontend project not found in projects list')
+      systemFrontend.value.status = 'not-found'
+    }
+  } catch (error) {
+    console.error('Failed to load system frontend:', error)
+    systemFrontend.value.status = 'error'
+  }
+}
+
+// 连接系统前端状态 SSE 流
+const connectSystemFrontendStateStream = () => {
+  if (!systemFrontend.value.id) {
+    return
+  }
+
+  if (systemFrontendStateEventSource) {
+    systemFrontendStateEventSource.close()
+  }
+
+  const token = localStorage.getItem('auth_token')
+  if (!token) {
+    return
+  }
+
+  const url = `/api/projects/${systemFrontend.value.id}/state/stream?token=${encodeURIComponent(token)}`
+  systemFrontendStateEventSource = new EventSource(url)
+
+  systemFrontendStateEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      
+      if (data.type === 'connected') {
+        return
+      }
+
+      if (data.type === 'state' && data.data) {
+        systemFrontend.value = {
+          id: systemFrontend.value.id,
+          status: data.data.status || systemFrontend.value.status,
+          port: data.data.port || systemFrontend.value.port,
+          url: data.data.url || systemFrontend.value.url,
+          lastDeploy: data.data.lastDeploy || systemFrontend.value.lastDeploy,
+          nodeVersion: data.data.nodeVersion || systemFrontend.value.nodeVersion
+        }
+      }
+    } catch (error) {
+      console.error('[SSE] Failed to parse system frontend state data:', error)
+    }
+  }
+
+  systemFrontendStateEventSource.onerror = () => {
+    if (systemFrontendStateEventSource) {
+      systemFrontendStateEventSource.close()
+      systemFrontendStateEventSource = null
+    }
+
+    setTimeout(() => {
+      if (systemFrontend.value.id) {
+        connectSystemFrontendStateStream()
+      }
+    }, 5000)
+  }
+}
+
+// 重新部署系统前端
+const redeploySystemFrontend = async () => {
+  console.log('[redeploySystemFrontend] systemFrontend.value:', systemFrontend.value)
+  
+  if (!systemFrontend.value.id) {
+    console.error('[redeploySystemFrontend] System frontend ID not found!')
+    toast.error(t('settings.systemFrontendNotFound'))
+    return
+  }
+
+  try {
+    console.log('[redeploySystemFrontend] Starting deployment for ID:', systemFrontend.value.id)
+    isRedeployingFrontend.value = true
+    await deployProject(systemFrontend.value.id, { reason: 'manual', triggeredBy: 'admin' })
+    console.log('[redeploySystemFrontend] Deployment request sent successfully')
+    toast.success(t('settings.redeployStarted'))
+  } catch (error) {
+    console.error('Failed to redeploy system frontend:', error)
+    console.error('Error details:', error.response?.data || error.message)
+    toast.error(t('settings.redeployFailed'))
+  } finally {
+    isRedeployingFrontend.value = false
+  }
+}
+
 // 检查 OAuth 回调
 onMounted(async () => {
   await loadGithubAppConfig() // Load GitHub App configuration first
   await loadGithubAccounts()
   await loadSystemInfo()
+  await loadSystemFrontend()
+  connectSystemFrontendStateStream()
 
   // 检查是否来自 OAuth 回调或 App 设置
   if (route.query.success === 'github_connected') {
@@ -518,9 +694,16 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  if (systemFrontendStateEventSource) {
+    systemFrontendStateEventSource.close()
+    systemFrontendStateEventSource = null
+  }
+})
 
 const formatDate = (date) => {
-  return new Date(date).toLocaleDateString()
+  if (!date) return t('dashboard.never')
+  return new Date(date).toLocaleString()
 }
 </script>
 
@@ -896,5 +1079,47 @@ const formatDate = (date) => {
   font-size: 12px;
   display: block;
   word-break: break-all;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #ecf0f1;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 13px;
+  color: #7f8c8d;
+  font-weight: 600;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+.info-value-link {
+  font-size: 14px;
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.info-value-link:hover {
+  text-decoration: underline;
 }
 </style>

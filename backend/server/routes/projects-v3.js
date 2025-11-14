@@ -471,6 +471,14 @@ router.post('/:id/stop', authMiddleware, (req, res) => {
       })
     }
 
+    // 禁止手动停止系统前端项目
+    if (project.type === 'core' && project.managed === true) {
+      return res.status(403).json({
+        success: false,
+        error: 'Cannot manually stop system frontend project. Please use redeploy instead.'
+      })
+    }
+
     console.log(`[Stop Project] Project found: ${project.name}`)
     const stopped = stopServerV3(id)
 

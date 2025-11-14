@@ -299,6 +299,17 @@ export async function deployProjectV3(projectId, options = {}) {
 
     // 步骤 6: 启动服务器
     logger.info('Step 6/6: Starting server...')
+    
+    // 在启动新服务器之前，先停止旧的服务器（如果正在运行）
+    // 这样确保构建完成后才停止，避免系统前端在构建期间无法访问
+    if (runningProcesses.has(projectId)) {
+      logger.info('Stopping existing server before starting new one...')
+      stopServerV3(projectId)
+      // 等待端口释放
+      await new Promise(resolve => setTimeout(resolve, 500))
+      logger.info('Old server stopped, port released')
+    }
+    
     await startServer(project, paths, nodeVersion, logger, frameworkInfo)
     logger.success(`Server started on port ${project.port}`)
 
