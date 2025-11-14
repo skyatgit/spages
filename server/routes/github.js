@@ -528,7 +528,7 @@ router.post('/create-app', authMiddleware, async (req, res) => {
       redirect_url: `${baseUrl}/api/github/manifest-callback`,
       callback_urls: [`${baseUrl}/api/github/callback`],
       setup_url: `${baseUrl}/api/github/callback`,
-      public: false,
+      public: true, // Allow installation to any GitHub account (personal, org, company)
       default_permissions: {
         contents: 'read',
         metadata: 'read',
