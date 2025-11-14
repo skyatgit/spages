@@ -15,18 +15,18 @@ const app = express()
 const PORT = process.env.PORT || 3000
 const HOST = process.env.HOST || 'localhost' // 只监听 localhost，不暴露到外网
 
-// Initialize application
+// 初始化应用
 await initApp()
 
-// Start project index sync (every 30 seconds)
+// 启动项目索引同步（每 30 秒）
 projectIndex.startSync(30000)
 console.log('Project index sync started')
 
-// Middleware
+// 中间件
 app.use(cors())
 app.use(express.json())
 
-// API Routes
+// API 路由
 app.use('/api/auth', authRoutes)
 app.use('/api/github', githubRoutes)
 app.use('/api/projects', projectsRoutes)
@@ -35,7 +35,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
 })
 
-// Serve frontend static files in production
+// 生产环境下提供前端静态文件
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(process.cwd(), 'dist')
   app.use(express.static(distPath))

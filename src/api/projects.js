@@ -1,43 +1,43 @@
 import apiClient from './index'
 
 export const projectsAPI = {
-  // Get all projects
+  // 获取所有项目
   getProjects() {
     return apiClient.get('/projects')
   },
 
-  // Get single project
+  // 获取单个项目
   getProject(id) {
     return apiClient.get(`/projects/${id}`)
   },
 
-  // Create new project
+  // 创建新项目
   createProject(data) {
     return apiClient.post('/projects', data)
   },
 
-  // Update project
+  // 更新项目
   updateProject(id, data) {
     return apiClient.put(`/projects/${id}`, data)
   },
 
-  // Delete project
+  // 删除项目
   deleteProject(id) {
     return apiClient.delete(`/projects/${id}`)
   },
 
-  // Start project
+  // 启动项目
   startProject(id) {
     return apiClient.post(`/projects/${id}/start`)
   },
 
-  // Stop project
+  // 停止项目
   stopProject(id) {
     return apiClient.post(`/projects/${id}/stop`)
   }
 }
 
-// Named exports for convenience
+// 便捷的命名导出
 export const checkProjectName = async (name) => {
   console.log('API: Checking project name:', name)
   const response = await apiClient.get(`/projects/check-name/${encodeURIComponent(name)}`)

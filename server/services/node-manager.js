@@ -9,7 +9,7 @@ const execAsync = promisify(exec)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const NODE_VERSIONS_DIR = path.join(process.cwd(), 'runtime', 'node-versions')
 
-// Ensure runtime directory exists
+// 确保运行时目录存在
 if (!fs.existsSync(NODE_VERSIONS_DIR)) {
   fs.mkdirSync(NODE_VERSIONS_DIR, { recursive: true })
 }

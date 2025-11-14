@@ -58,4 +58,4 @@ export class ConfigManager {
 export const mainConfig = new ConfigManager('config.json')
 export const projectsConfig = new ConfigManager('projects.json')
 export const githubAccountsConfig = new ConfigManager('github-accounts.json')
-export const githubAppConfig = new ConfigManager('github-app.json') // Shared GitHub App config
+export const githubAppConfig = new ConfigManager('github-app.json') // 共享 GitHub App 配置

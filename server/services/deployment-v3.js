@@ -221,10 +221,10 @@ export async function deployProjectV3(projectId, options = {}) {
       outputDir: frameworkInfo.outputDir
     })
 
-    // Step 3: Detect Node version
+    // 步骤 3: 检测 Node 版本
     let nodeVersion = 'system'
 
-    // Only detect and install Node version if build is needed
+    // 仅当需要构建时才检测和安装 Node 版本
     if (frameworkInfo.needsBuild) {
       const requiredVersion = await detectRequiredNodeVersion(paths.source)
       logger.info(`Detected Node version requirement: ${requiredVersion}`)

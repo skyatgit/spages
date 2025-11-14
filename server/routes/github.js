@@ -74,7 +74,7 @@ const getInstallationAccessToken = async (installationId) => {
   return response.data.token
 }
 
-// Get base URL dynamically from request (for proxy support)
+// 从请求中动态获取基础 URL（支持代理）
 const getBaseUrl = (req) => {
   // 如果设置了环境变量，使用环境变量
   if (process.env.BASE_URL) {
@@ -110,13 +110,13 @@ const getBaseUrl = (req) => {
   return 'http://localhost:5173'
 }
 
-// Get shared GitHub App configuration status
+// 获取共享 GitHub App 配置状态
 router.get('/app-config', authMiddleware, (req, res) => {
   try {
     const appConfig = githubAppConfig.read()
 
     if (appConfig.configured && appConfig.appId) {
-      // Return app info without sensitive data
+      // 返回 app 信息，不包含敏感数据
       res.json({
         configured: true,
         appId: appConfig.appId,
@@ -135,7 +135,7 @@ router.get('/app-config', authMiddleware, (req, res) => {
   }
 })
 
-// Delete shared GitHub App configuration
+// 删除共享 GitHub App 配置
 router.delete('/app-config', authMiddleware, async (req, res) => {
   try {
     const appConfig = githubAppConfig.read()

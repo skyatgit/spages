@@ -8,10 +8,10 @@ const apiClient = axios.create({
   }
 })
 
-// Request interceptor
+// 请求拦截器
 apiClient.interceptors.request.use(
   config => {
-    // Add auth token if exists
+    // 如果存在认证令牌则添加
     const token = localStorage.getItem('auth_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
@@ -23,11 +23,11 @@ apiClient.interceptors.request.use(
   }
 )
 
-// Response interceptor
+// 响应拦截器
 apiClient.interceptors.response.use(
   response => response.data,
   error => {
-    // Handle 401 Unauthorized
+    // 处理 401 未授权
     if (error.response && error.response.status === 401) {
       // 获取请求的 URL
       const requestUrl = error.config?.url || ''

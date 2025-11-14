@@ -68,13 +68,13 @@ router.get('/check-port/:port', authMiddleware, (req, res) => {
   }
 })
 
-// Get next available port
+// 获取下一个可用端口
 router.get('/next-available-port', authMiddleware, (req, res) => {
   try {
     const allProjects = projectIndex.getAll()
     const usedPorts = Object.values(allProjects).map(p => p.port)
 
-    // Start from 3001 and find the first available port
+    // 从 3001 开始找到第一个可用端口
     let port = 3001
     while (usedPorts.includes(port)) {
       port++
@@ -88,11 +88,11 @@ router.get('/next-available-port', authMiddleware, (req, res) => {
   }
 })
 
-// Get all projects (from index)
+// 获取所有项目（从索引中）
 router.get('/', authMiddleware, (req, res) => {
   try {
     const projects = projectIndex.getAll()
-    // Add ID to each project object and use real-time status
+    // 为每个项目对象添加 ID 并使用实时状态
     const projectList = Object.entries(projects).map(([id, project]) => {
       // 获取真实的实时状态（基于 runningProcesses 和 deployingProjects）
       const actualStatus = getProjectRealStatus(id)

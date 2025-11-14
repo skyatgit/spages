@@ -4,7 +4,7 @@ import path from 'path'
 const DATA_DIR = path.join(process.cwd(), 'data')
 const LOGS_DIR = path.join(DATA_DIR, 'logs')
 
-// Ensure logs directory exists
+// 确保日志目录存在
 if (!fs.existsSync(LOGS_DIR)) {
   fs.mkdirSync(LOGS_DIR, { recursive: true })
 }

@@ -344,7 +344,7 @@ const handleSetupGithubApp = async () => {
     console.log('[Frontend] Base URL:', baseUrl)
     console.log('[Frontend] Encoded Base URL:', encodeURIComponent(baseUrl))
 
-    // Directly navigate to GitHub App creation page
+    // 直接导航到 GitHub App 创建页面
     const setupUrl = `/api/github/setup-app?baseUrl=${encodeURIComponent(baseUrl)}`
     console.log('[Frontend] Navigating to:', setupUrl)
 
@@ -355,7 +355,7 @@ const handleSetupGithubApp = async () => {
   }
 }
 
-// Delete GitHub App
+// 删除 GitHub App
 const handleDeleteGithubApp = async () => {
   const confirmed = await modal.confirm(t('settings.deleteAppConfirm'))
   if (!confirmed) return
@@ -363,7 +363,7 @@ const handleDeleteGithubApp = async () => {
   try {
     const response = await deleteGithubAppConfig()
 
-    // Show results
+    // 显示结果
     const { results, note, appDeleteUrl } = response
     let message = t('settings.appDeleted')
 

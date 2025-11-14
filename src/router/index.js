@@ -37,15 +37,15 @@ const router = createRouter({
   ]
 })
 
-// Navigation guard
+// 路由守卫
 router.beforeEach((to, from, next) => {
-  const requiresAuth = to.meta.requiresAuth !== false // Default to requiring auth
+  const requiresAuth = to.meta.requiresAuth !== false // 默认需要认证
 
   if (requiresAuth && !isAuthenticated()) {
-    // Redirect to login if not authenticated
+    // 如果未认证则重定向到登录页
     next('/login')
   } else if (to.path === '/login' && isAuthenticated()) {
-    // Redirect to dashboard if already authenticated
+    // 如果已认证则重定向到仪表板
     next('/')
   } else {
     next()
