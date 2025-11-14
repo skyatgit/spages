@@ -202,13 +202,13 @@ const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 
-// Admin Credentials
+// 管理员凭据
 const currentPassword = ref('')
 const newUsername = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 
-// GitHub Accounts
+// GitHub 账号
 const githubAccounts = ref([]) // Authorized Apps
 const orphanedApps = ref([]) // Unauthorized Apps
 const loadingAccounts = ref(false)
@@ -216,7 +216,7 @@ const githubAppConfigured = ref(false)
 const githubAppInfo = ref({})
 
 
-// System Info
+// 系统信息
 const systemInfo = ref({
   appVersion: 'Loading...',
   nodeVersion: 'Loading...',
@@ -312,7 +312,7 @@ const updateCredentials = async () => {
   }
 }
 
-// Load GitHub App configuration
+// 加载 GitHub App 配置
 const loadGithubAppConfig = async () => {
   try {
     const config = await getGithubAppConfig()
@@ -326,17 +326,17 @@ const loadGithubAppConfig = async () => {
   }
 }
 
-// Setup GitHub App (one-time configuration)
+// 设置 GitHub App（一次性配置）
 const handleSetupGithubApp = async () => {
   try {
-    // Check if already configured first
+    // 首先检查是否已配置
     const appConfig = await getGithubAppConfig()
     if (appConfig.configured) {
       await modal.alert(t('settings.appAlreadyConfigured'))
       return
     }
 
-    // Get current base URL (protocol + host)
+    // 获取当前基础 URL（协议 + 主机）
     const baseUrl = `${window.location.protocol}//${window.location.host}`
 
     console.log('[Frontend] window.location.protocol:', window.location.protocol)
@@ -447,22 +447,22 @@ const addGithubAccount = async () => {
   }
 }
 
-// Remove an App connection
+// 移除 App 连接
 const removeApp = async (appId, username, appSlug) => {
   const confirmed = await modal.confirm(t('settings.removeAppConfirm', { username, appSlug }))
   if (confirmed) {
-    // Ask if user wants to delete from GitHub too
+    // 询问用户是否也要从 GitHub 删除
     const deleteFromGitHub = await modal.confirm(t('settings.deleteFromGitHubConfirm'))
 
     try {
       const response = await removeGithubAccount(appId, deleteFromGitHub)
       await loadGithubAccounts()
 
-      // Show detailed result
+      // 显示详细结果
       if (deleteFromGitHub && response.results) {
         const { installationDeleted, appDeleteUrl, errors } = response.results
         if (installationDeleted && appDeleteUrl) {
-          // Installation deleted, but App needs manual deletion
+          // 安装已删除，但 App 需要手动删除
           const confirmManualDelete = await modal.confirm(
             t('settings.installationDeletedManual', { url: appDeleteUrl })
           )
@@ -484,13 +484,13 @@ const removeApp = async (appId, username, appSlug) => {
   }
 }
 
-// Check for OAuth callback
+// 检查 OAuth 回调
 onMounted(async () => {
   await loadGithubAppConfig() // Load GitHub App configuration first
   await loadGithubAccounts()
   await loadSystemInfo()
 
-  // Check if coming from OAuth callback or App setup
+  // 检查是否来自 OAuth 回调或 App 设置
   if (route.query.success === 'github_connected') {
     // 延迟显示，确保页面已经渲染完成
     setTimeout(() => {

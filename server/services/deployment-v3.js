@@ -179,18 +179,18 @@ export async function deployProjectV3(projectId, options = {}) {
     // 标记为部署中
     deployingProjects.set(projectId, true)
 
-    // Update status to building and broadcast
+    // 更新状态为构建中并广播
     updateAndBroadcastProjectState(projectId, { status: 'building' })
 
     // 广播部署开始（立即显示在部署历史中）
     broadcastDeploymentHistory(projectId, deployment)
 
-    // Step 1: Clone repository
+    // 步骤 1: 克隆仓库
     logger.info('Step 1/6: Cloning repository...')
     await cloneRepository(project, paths, logger)
     logger.success('Repository cloned successfully')
 
-    // Get commit information
+    // 获取提交信息
     logger.info('Getting commit information...')
     const commitInfo = await getLatestCommitInfo(paths.source, logger)
     if (commitInfo) {
@@ -267,7 +267,7 @@ export async function deployProjectV3(projectId, options = {}) {
       nodeVersion = 'system'
     }
 
-    // Step 4: Install dependencies
+    // 步骤 4: 安装依赖
     if (frameworkInfo.installDeps) {
       logger.info('Step 4/6: Installing dependencies...')
       await installDependencies(paths.source, nodeVersion, logger)
@@ -276,7 +276,7 @@ export async function deployProjectV3(projectId, options = {}) {
       logger.info('Step 4/6: Skipping dependency installation (not required)')
     }
 
-    // Step 5: Build project
+    // 步骤 5: 构建项目
     if (frameworkInfo.needsBuild) {
       logger.info('Step 5/6: Building project...')
       await buildProject(project, paths.source, nodeVersion, logger, frameworkInfo)
@@ -285,12 +285,12 @@ export async function deployProjectV3(projectId, options = {}) {
       logger.info('Step 5/6: Skipping build (static project)')
     }
 
-    // Step 6: Start server
+    // 步骤 6: 启动服务器
     logger.info('Step 6/6: Starting server...')
     await startServer(project, paths, nodeVersion, logger, frameworkInfo)
     logger.success(`Server started on port ${project.port}`)
 
-    // Update status to running and broadcast
+    // 更新状态为运行中并广播
     const duration = Date.now() - deployment.startTime
     const serverHost = getServerHost(projectId) // 传入 projectId
     const url = `http://${serverHost}:${project.port}`
@@ -479,7 +479,7 @@ async function buildProject(project, sourcePath, nodeVersion, logger, frameworkI
  * Start server
  */
 async function startServer(project, paths, nodeVersion, logger, frameworkInfo) {
-  // Use framework info output dir, then fallback to project config, then default to 'dist'
+  // 使用框架信息输出目录，然后回退到项目配置，最后默认为 'dist'
   const outputDir = frameworkInfo.outputDir || project.outputDir || 'dist'
   const distPath = path.join(paths.source, outputDir)
 
@@ -489,7 +489,7 @@ async function startServer(project, paths, nodeVersion, logger, frameworkInfo) {
     throw new Error(`Output directory not found: ${distPath}`)
   }
 
-  // Stop existing process if any
+  // 停止现有进程（如果有）
   stopServerV3(project.id)
 
   logger.info(`Serving from: ${distPath}`)

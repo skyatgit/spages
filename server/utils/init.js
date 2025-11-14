@@ -52,7 +52,7 @@ export async function initApp() {
       maxProjects: 50,
       nodeVersions: [],
       cleanupOldBuilds: true,
-      maxBuildAge: 30 // days
+      maxBuildAge: 30 // 天数
     }
   }
 

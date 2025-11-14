@@ -1,4 +1,4 @@
-// Authentication utilities
+// 认证工具
 
 export function isAuthenticated() {
   return localStorage.getItem('is_authenticated') === 'true'

@@ -106,7 +106,7 @@ export class ProjectPaths {
           const sleepMs = 500
           const start = Date.now()
           while (Date.now() - start < sleepMs) {
-            // Busy wait
+            // 忙等待
           }
         }
       }

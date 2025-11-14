@@ -24,7 +24,7 @@ import {
 
 const router = express.Router()
 
-// Check if project name is available
+// 检查项目名称是否可用
 router.get('/check-name/:name', authMiddleware, (req, res) => {
   try {
     const { name } = req.params
@@ -41,7 +41,7 @@ router.get('/check-name/:name', authMiddleware, (req, res) => {
   }
 })
 
-// Check if port is available
+// 检查端口是否可用
 router.get('/check-port/:port', authMiddleware, (req, res) => {
   try {
     const port = parseInt(req.params.port)
@@ -246,13 +246,13 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const allProjects = projectIndex.getAll()
 
-    // Check if name already exists
+    // 检查名称是否已存在
     const nameExists = Object.values(allProjects).some(p => p.name === name)
     if (nameExists) {
       return res.status(400).json({ error: 'Project name already exists' })
     }
 
-    // Check if port is already in use
+    // 检查端口是否已被使用
     const portInUse = Object.values(allProjects).some(p => p.port === port)
     if (portInUse) {
       return res.status(400).json({ error: 'Port already in use' })
@@ -358,10 +358,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     console.log(`[Delete Project] Stopping project: ${id}`)
 
-    // Stop the running project before deleting
+    // 删除前停止运行中的项目
     stopServerV3(id)
 
-    // Wait for the process to fully terminate and file handles to be released (important on Windows)
+    // 等待进程完全终止并释放文件句柄（在 Windows 上很重要）
     console.log('[Delete Project] Waiting for file handles to be released...')
     await new Promise(resolve => setTimeout(resolve, 500))
 
@@ -563,7 +563,7 @@ router.get('/:id/logs/stream', (req, res) => {
   })
 })
 
-// Get deployment history for a project
+// 获取项目的部署历史
 router.get('/:id/deployments', authMiddleware, (req, res) => {
   try {
     const { id } = req.params

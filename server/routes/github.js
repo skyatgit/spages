@@ -7,28 +7,28 @@ import { authMiddleware } from '../utils/auth.js'
 
 const router = express.Router()
 
-// Helper function to generate unique 8-character identifier
-// Uses Base62 encoding (0-9, a-z, A-Z) for better entropy
-// Combines timestamp and random data to ensure uniqueness
+// 辅助函数：生成唯一的 8 字符标识符
+// 使用 Base62 编码（0-9, a-z, A-Z）以获得更好的熵
+// 结合时间戳和随机数据以确保唯一性
 const generateUniqueId = () => {
   const base62Chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
-  // Get current timestamp in milliseconds
+  // 获取当前时间戳（毫秒）
   const timestamp = Date.now()
 
-  // Generate random bytes for additional entropy
+  // 生成随机字节以增加额外的熵
   const randomBytes = crypto.randomBytes(4)
 
-  // Combine timestamp (6 bytes) and random (4 bytes) = 10 bytes total
+  // 组合时间戳（6 字节）和随机数（4 字节）= 总共 10 字节
   const buffer = Buffer.allocUnsafe(10)
-  buffer.writeBigUInt64BE(BigInt(timestamp), 0) // Write timestamp (first 8 bytes, we'll use last 6)
-  randomBytes.copy(buffer, 6) // Copy 4 random bytes
+  buffer.writeBigUInt64BE(BigInt(timestamp), 0) // 写入时间戳（前 8 字节，我们将使用最后 6 字节）
+  randomBytes.copy(buffer, 6) // 复制 4 个随机字节
 
-  // Convert to a large number and then to base62
-  // We'll use the last 8 bytes for conversion
-  const num = buffer.readBigUInt64BE(2) // Read 8 bytes starting from position 2
+  // 转换为大数字，然后转换为 base62
+  // 我们将使用最后 8 字节进行转换
+  const num = buffer.readBigUInt64BE(2) // 从位置 2 开始读取 8 字节
 
-  // Convert to base62 (8 characters)
+  // 转换为 base62（8 个字符）
   let result = ''
   let remaining = num
 
@@ -41,7 +41,7 @@ const generateUniqueId = () => {
   return result
 }
 
-// Helper function to generate installation access token
+// 辅助函数：生成安装访问令牌
 const getInstallationAccessToken = async (installationId) => {
   const appConfig = githubAppConfig.read()
 
@@ -49,7 +49,7 @@ const getInstallationAccessToken = async (installationId) => {
     throw new Error('GitHub App not configured')
   }
 
-  // Generate JWT for the app
+  // 为应用生成 JWT
   const now = Math.floor(Date.now() / 1000)
   const payload = {
     iat: now - 60,
@@ -58,7 +58,7 @@ const getInstallationAccessToken = async (installationId) => {
   }
   const appToken = jwt.sign(payload, appConfig.pem, { algorithm: 'RS256' })
 
-  // Get installation access token
+  // 获取安装访问令牌
   const response = await axios.post(
     `https://api.github.com/app/installations/${installationId}/access_tokens`,
     {},
@@ -297,7 +297,7 @@ router.get('/setup-app', async (req, res) => {
     const manifestId = Date.now().toString()
     global.pendingSetupManifest[manifestId] = manifest
 
-    // Redirect to submit page (same pattern as before)
+    // 重定向到提交页面（与之前相同的模式）
     res.redirect(`/api/github/submit-setup-manifest?id=${manifestId}`)
   } catch (error) {
     console.error('Error creating app setup:', error)
@@ -307,7 +307,7 @@ router.get('/setup-app', async (req, res) => {
 })
 
 
-// Handle setup callback (save shared App config)
+// 处理设置回调（保存共享 App 配置）
 router.get('/setup-callback', async (req, res) => {
   try {
     const { code } = req.query
@@ -353,7 +353,7 @@ router.get('/setup-callback', async (req, res) => {
 
     console.log('[Setup Callback] Using baseUrl:', baseUrl)
 
-    // Save as the shared App configuration
+    // 保存为共享 App 配置
     const appConfig = {
       configured: true,
       appId: appData.id,

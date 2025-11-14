@@ -547,7 +547,7 @@ const loadEnvVars = async () => {
   try {
     const response = await getEnvVars(projectId)
     if (response && response.env) {
-      // Convert object to array format for UI
+      // 将对象转换为数组格式以供 UI 使用
       const envArray = {}
       let counter = 1
       for (const [key, value] of Object.entries(response.env)) {

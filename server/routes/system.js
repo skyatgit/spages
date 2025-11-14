@@ -73,7 +73,7 @@ function getDirectorySize(dirPath) {
           totalSize += stats.size
         }
       } catch (error) {
-        // Skip files that can't be accessed
+        // 跳过无法访问的文件
         console.warn(`Could not access ${filePath}:`, error.message)
       }
     }
@@ -151,10 +151,10 @@ router.get('/storage', authMiddleware, (req, res) => {
     const projectsDir = path.resolve(process.cwd(), 'projects')
     const dataDir = path.resolve(process.cwd(), 'data')
 
-    // Calculate projects directory size
+    // 计算项目目录大小
     const projectsSize = bytesToMB(getDirectorySize(projectsDir))
 
-    // Calculate dependencies size (node_modules)
+    // 计算依赖大小（node_modules）
     let dependenciesSize = 0
     if (fs.existsSync(projectsDir)) {
       const projects = fs.readdirSync(projectsDir)
@@ -204,7 +204,7 @@ router.get('/storage', authMiddleware, (req, res) => {
     logsSize += getDirectorySize(globalLogsPath)
     logsSize = bytesToMB(logsSize)
 
-    // Total (projects includes everything, so we need to subtract dependencies, cache and logs to avoid double counting)
+    // 总计（projects 包含所有内容，因此需要减去依赖、缓存和日志以避免重复计算）
     const total = projectsSize
     const projectsDataOnly = total - dependenciesSize - cacheSize - logsSize
 
@@ -244,7 +244,7 @@ router.post('/clear-cache', authMiddleware, (req, res) => {
         const sourcePath = path.join(projectsDir, project, 'source')
 
         // 只清理真正的构建缓存（不包括 node_modules）
-        // Clear .cache
+        // 清空 .cache
         const cachePath = path.join(sourcePath, '.cache')
         if (fs.existsSync(cachePath)) {
           const size = getDirectorySize(cachePath)
@@ -280,7 +280,7 @@ router.post('/clear-cache', authMiddleware, (req, res) => {
           clearedCount++
         }
 
-        // Clear .turbo (Turbo cache)
+        // 清空 .turbo (Turbo 缓存)
         const turboPath = path.join(sourcePath, '.turbo')
         if (fs.existsSync(turboPath)) {
           const size = getDirectorySize(turboPath)
@@ -345,7 +345,7 @@ router.post('/clear-logs', authMiddleware, (req, res) => {
       }
     }
 
-    // Clear global logs
+    // 清空全局日志
     const globalLogsPath = path.resolve(process.cwd(), 'logs')
     if (fs.existsSync(globalLogsPath)) {
       const size = getDirectorySize(globalLogsPath)

@@ -2,11 +2,11 @@ import { createI18n } from 'vue-i18n'
 import zhCN from './zh-CN'
 import enUS from './en-US'
 
-// Get saved language from localStorage or use default (zh-CN)
+// 从 localStorage 获取保存的语言或使用默认值（zh-CN）
 const savedLanguage = localStorage.getItem('language') || 'zh-CN'
 
 const i18n = createI18n({
-  legacy: false, // Use Composition API mode
+  legacy: false, // 使用 Composition API 模式
   locale: savedLanguage,
   fallbackLocale: 'zh-CN',
   messages: {
@@ -17,7 +17,7 @@ const i18n = createI18n({
 
 export default i18n
 
-// Helper function to change language
+// 辅助函数：切换语言
 export function setLanguage(locale) {
   i18n.global.locale.value = locale
   localStorage.setItem('language', locale)

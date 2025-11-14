@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.join(process.cwd(), 'data')
 
-// Ensure data directory exists
+// 确保数据目录存在
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true })
 }
@@ -58,4 +58,4 @@ export class ConfigManager {
 export const mainConfig = new ConfigManager('config.json')
 export const projectsConfig = new ConfigManager('projects.json')
 export const githubAccountsConfig = new ConfigManager('github-accounts.json')
-export const githubAppConfig = new ConfigManager('github-app.json') // 共享 GitHub App 配置
+export const githubAppConfig = new ConfigManager('github-app.json') // GitHub App 配置
