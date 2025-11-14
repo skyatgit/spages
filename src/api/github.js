@@ -10,12 +10,7 @@ export const deleteGithubAppConfig = async () => {
   return apiClient.delete('/github/app-config')
 }
 
-// Setup shared GitHub App (one-time)
-export const setupGithubApp = async () => {
-  return apiClient.post('/github/setup-app')
-}
-
-// Get GitHub App creation URL
+// Get GitHub App installation URL
 export const getGithubInstallUrl = async () => {
   return apiClient.get('/github/create-app')
 }

@@ -44,3 +44,4 @@ projects/
 .env
 .runtime/
 docs/
+.ai/

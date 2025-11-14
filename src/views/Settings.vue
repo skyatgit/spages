@@ -149,43 +149,6 @@
             <div v-if="githubAccounts.length === 0 && orphanedApps.length === 0" class="no-accounts">
               <p>{{ $t('settings.noAccounts') }}</p>
             </div>
-
-            <!-- Orphaned Apps (Apps without user accounts) -->
-            <div v-if="orphanedApps.length > 0" class="orphaned-apps-section">
-              <h3 class="orphaned-apps-title">{{ $t('settings.orphanedApps') }}</h3>
-              <p class="orphaned-apps-desc">{{ $t('settings.orphanedAppsDesc') }}</p>
-              <div
-                v-for="app in orphanedApps"
-                :key="app.id"
-                class="orphaned-app-item"
-              >
-                <div class="app-info-full">
-                  <div class="app-avatar">
-                    <img v-if="app.ownerAvatar" :src="app.ownerAvatar" :alt="app.ownerLogin" />
-                    <span v-else class="avatar-placeholder">{{ app.ownerLogin[0].toUpperCase() }}</span>
-                  </div>
-                  <div class="app-details">
-                    <div class="app-name">{{ app.appSlug }}</div>
-                    <div class="app-owner">{{ $t('settings.appOwner') }}: {{ app.ownerLogin }}</div>
-                    <div class="app-meta">
-                      {{ $t('settings.createdOn') }} {{ formatDate(app.createdAt) }}
-                    </div>
-                    <div class="app-status">
-                      <span class="status-badge status-incomplete">{{ $t('settings.notAuthorized') }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="app-actions">
-                  <button
-                    class="btn-icon"
-                    @click="removeOrphanedApp(app.id, app.appSlug)"
-                    :title="$t('common.delete')"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
 
           <button class="btn btn-primary" @click="addGithubAccount">
@@ -229,7 +192,7 @@ import Layout from '@/components/Layout.vue'
 import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { useToast } from '@/utils/toast'
-import { getGithubAppConfig, deleteGithubAppConfig, setupGithubApp, getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount, removeGithubUser } from '@/api/github'
+import { getGithubAppConfig, deleteGithubAppConfig, getGithubInstallUrl, getGithubAccounts, refreshGithubAccount, removeGithubAccount } from '@/api/github'
 import { getSystemInfo } from '@/api/system'
 import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
 
@@ -439,7 +402,6 @@ const loadGithubAccounts = async () => {
     loadingAccounts.value = true
     const data = await getGithubAccounts()
     githubAccounts.value = data.authorized || []
-    orphanedApps.value = data.unauthorized || []
   } catch (error) {
     console.error('Failed to load GitHub accounts:', error)
   } finally {
@@ -485,21 +447,6 @@ const addGithubAccount = async () => {
   }
 }
 
-// Refresh account information
-const refreshAccount = async (id) => {
-  try {
-    const updatedAccount = await refreshGithubAccount(id)
-    const index = githubAccounts.value.findIndex(a => a.id === id)
-    if (index !== -1) {
-      githubAccounts.value[index] = updatedAccount
-    }
-    await modal.alert(t('settings.accountRefreshed'))
-  } catch (error) {
-    console.error('Failed to refresh account:', error)
-    await modal.alert(t('settings.accountRefreshFailed'))
-  }
-}
-
 // Remove an App connection
 const removeApp = async (appId, username, appSlug) => {
   const confirmed = await modal.confirm(t('settings.removeAppConfirm', { username, appSlug }))
@@ -532,43 +479,6 @@ const removeApp = async (appId, username, appSlug) => {
       }
     } catch (error) {
       console.error('Failed to remove app:', error)
-      await modal.alert(t('settings.appRemoveFailed'))
-    }
-  }
-}
-
-// Remove orphaned App (App without user account)
-const removeOrphanedApp = async (appId, appSlug) => {
-  const confirmed = await modal.confirm(t('settings.removeOrphanedAppConfirm', { appSlug }))
-  if (confirmed) {
-    // Ask if user wants to delete from GitHub too
-    const deleteFromGitHub = await modal.confirm(t('settings.deleteFromGitHubConfirm'))
-
-    try {
-      const response = await removeGithubAccount(appId, deleteFromGitHub)
-      await loadGithubAccounts()
-
-      // Show detailed result
-      if (deleteFromGitHub && response.results) {
-        const { appDeleteUrl, errors } = response.results
-        if (appDeleteUrl) {
-          // App needs manual deletion
-          const confirmManualDelete = await modal.confirm(
-            t('settings.appDeleteManual', { url: appDeleteUrl })
-          )
-          if (confirmManualDelete) {
-            window.open(appDeleteUrl, '_blank')
-          }
-        } else if (errors && errors.length > 0) {
-          toast.error(t('settings.appRemovedLocalOnly') + ': ' + errors.join(', '))
-        } else {
-          toast.success(t('settings.orphanedAppRemoved'))
-        }
-      } else {
-        toast.success(t('settings.orphanedAppRemoved'))
-      }
-    } catch (error) {
-      console.error('Failed to remove orphaned app:', error)
       await modal.alert(t('settings.appRemoveFailed'))
     }
   }
@@ -954,112 +864,6 @@ const formatDate = (date) => {
   text-align: center;
   padding: 40px;
   color: #7f8c8d;
-}
-
-.orphaned-apps-section {
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 2px solid #ecf0f1;
-}
-
-.orphaned-apps-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #e67e22;
-  margin-bottom: 8px;
-}
-
-.orphaned-apps-desc {
-  font-size: 13px;
-  color: #95a5a6;
-  margin-bottom: 15px;
-}
-
-.orphaned-app-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border: 2px dashed #f39c12;
-  border-radius: 8px;
-  margin-bottom: 12px;
-  background: #fef5e7;
-  transition: border-color 0.3s ease;
-}
-
-.orphaned-app-item:hover {
-  border-color: #e67e22;
-}
-
-.app-info-full {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  flex: 1;
-}
-
-.app-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #ecf0f1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.app-details {
-  flex: 1;
-}
-
-.app-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #2c3e50;
-  font-family: monospace;
-  margin-bottom: 4px;
-}
-
-.app-owner {
-  font-size: 13px;
-  color: #7f8c8d;
-  margin-bottom: 2px;
-}
-
-.app-meta {
-  font-size: 12px;
-  color: #95a5a6;
-  margin-bottom: 6px;
-}
-
-.app-status {
-  margin-top: 6px;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.status-incomplete {
-  background: #ffe5cc;
-  color: #e67e22;
-}
-
-.app-actions {
-  display: flex;
-  gap: 8px;
 }
 
 
