@@ -31,19 +31,7 @@
         />
       </div>
 
-      <!-- 系统前端模式快速切换（可选展示） -->
-      <div v-if="coreFrontend" class="core-frontend-actions">
-        <div class="card">
-          <h3>系统前端</h3>
-          <p>当前模式：<strong>{{ coreFrontend.mode || 'dev' }}</strong>，端口：<strong>{{ coreFrontend.port || '-' }}</strong></p>
-          <div class="actions">
-            <button class="btn" @click="switchCoreMode(coreFrontend.mode === 'dev' ? 'prod' : 'dev')">
-              切换为 {{ coreFrontend.mode === 'dev' ? 'prod' : 'dev' }}
-            </button>
-            <button class="btn" @click="restartCore()">重启</button>
-          </div>
-        </div>
-      </div>
+      <!-- 已移除：系统前端模式切换与重启相关 UI -->
     </div>
 
     <DeleteProgressModal
@@ -55,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Layout from '@/components/Layout.vue'
@@ -75,12 +63,8 @@ const loading = ref(true)
 const showDeleteProgress = ref(false)
 const deleteProgressModal = ref(null)
 
-// SSE 连接引用
 let projectsStateEventSource = null
 
-const coreFrontend = computed(() => projects.value.find(p => p.type === 'core' && p.managed === true))
-
-// 页面加载时获取项目列表
 onMounted(async () => {
   await loadProjects()
   connectProjectsStateStream()
@@ -109,8 +93,13 @@ const connectProjectsStateStream = () => {
       const data = JSON.parse(event.data)
       if (data.type === 'connected') return
       if (data.type === 'initial') {
-        projects.value = data.data
+        // 过滤掉没有 name 的项目
+        projects.value = (data.data || []).filter(p => p && p.id && p.name)
       } else if (data.type === 'project.update') {
+        if (!data.data || !data.data.name) {
+          console.warn('[SSE] 忽略无效项目更新（缺少 name）:', data)
+          return
+        }
         const index = projects.value.findIndex(p => p.id === data.projectId)
         if (index !== -1) {
           projects.value[index] = { ...projects.value[index], ...data.data }
@@ -170,26 +159,6 @@ const handleStop = async (projectId) => {
     console.error('Failed to stop project:', error)
     const errorMsg = error.response?.data?.error || error.message
     toast.error(t('dashboard.stopFailed') + ': ' + errorMsg)
-  }
-}
-
-const switchCoreMode = async (target) => {
-  try {
-    if (!coreFrontend.value) return
-    await projectsAPI.switchMode(coreFrontend.value.id, target)
-    toast.success('模式已切换为 ' + target)
-  } catch (e) {
-    toast.error('切换模式失败：' + (e.response?.data?.error || e.message))
-  }
-}
-
-const restartCore = async () => {
-  try {
-    if (!coreFrontend.value) return
-    await projectsAPI.restartProject(coreFrontend.value.id)
-    toast.success('系统前端已重启')
-  } catch (e) {
-    toast.error('重启失败：' + (e.response?.data?.error || e.message))
   }
 }
 </script>
@@ -267,21 +236,5 @@ const restartCore = async () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: 20px;
-}
-
-.core-frontend-actions {
-  margin-top: 24px;
-}
-
-.core-frontend-actions .card {
-  background: #fff;
-  padding: 16px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.core-frontend-actions .actions {
-  display: flex;
-  gap: 10px;
 }
 </style>

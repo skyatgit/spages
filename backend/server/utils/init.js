@@ -1,7 +1,5 @@
 import { mainConfig } from './config.js'
 import { hashPassword } from './auth.js'
-import fs from 'fs'
-import path from 'path'
 import { projectIndex, ProjectPaths, ProjectConfig } from '../services/project-manager.js'
 
 /**
@@ -44,7 +42,6 @@ function ensureSystemFrontendProject() {
     if (!config.frontend) {
       config.frontend = {
         projectId: 'proj_spages_frontend',
-        defaultMode: 'dev',
         defaultPort: 5173,
         autoRestart: true
       }
@@ -76,7 +73,6 @@ function ensureSystemFrontendProject() {
         buildCommand: 'npm run build',
         outputDir: 'dist',
         sourceRoot: '../frontend', // 从 backend 指向 frontend
-        mode: config.frontend.defaultMode || 'dev',
         status: 'stopped',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -123,7 +119,6 @@ export async function initApp() {
 
   if (!config.settings) {
     config.settings = {
-      dataDir: 'SPages',
       maxProjects: 50,
       nodeVersions: [],
       cleanupOldBuilds: true,

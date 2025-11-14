@@ -7,8 +7,9 @@ import { fileURLToPath } from 'url'
 
 const execAsync = promisify(exec)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-// 从 backend/server/services/ 向上两级到 backend/
+// 将 runtime 目录定位到 backend 目录下的 runtime/node-versions
 const NODE_VERSIONS_DIR = path.resolve(__dirname, '../..', 'runtime', 'node-versions')
+console.log(`[node-manager] NODE_VERSIONS_DIR: ${NODE_VERSIONS_DIR} (exists=${fs.existsSync(NODE_VERSIONS_DIR)})`)
 
 // 确保运行时目录存在
 if (!fs.existsSync(NODE_VERSIONS_DIR)) {
@@ -78,15 +79,15 @@ export function getNodeExecutablePath(version) {
   if (version === 'system') {
     return 'node'
   }
-
   const versionDir = path.join(NODE_VERSIONS_DIR, `node-v${version}`)
   const isWindows = process.platform === 'win32'
-
-  if (isWindows) {
-    return path.join(versionDir, 'node.exe')
-  } else {
-    return path.join(versionDir, 'bin', 'node')
+  const candidate = isWindows
+    ? path.join(versionDir, 'node.exe')
+    : path.join(versionDir, 'bin', 'node')
+  if (!fs.existsSync(candidate)) {
+    throw new Error(`[node-manager] Runtime Node v${version} not found at ${candidate}`)
   }
+  return candidate
 }
 
 /**
@@ -96,15 +97,15 @@ export function getNpmExecutablePath(version) {
   if (version === 'system') {
     return 'npm'
   }
-
   const versionDir = path.join(NODE_VERSIONS_DIR, `node-v${version}`)
   const isWindows = process.platform === 'win32'
-
-  if (isWindows) {
-    return path.join(versionDir, 'npm.cmd')
-  } else {
-    return path.join(versionDir, 'bin', 'npm')
+  const candidate = isWindows
+    ? path.join(versionDir, 'npm.cmd')
+    : path.join(versionDir, 'bin', 'npm')
+  if (!fs.existsSync(candidate)) {
+    throw new Error(`[node-manager] Runtime npm for Node v${version} not found at ${candidate}`)
   }
+  return candidate
 }
 
 /**
@@ -308,6 +309,8 @@ export async function execWithNodeVersion(command, version, cwd, onOutput) {
 
   console.log(`[execWithNodeVersion] Working directory: ${cwd}`)
   console.log(`[execWithNodeVersion] Node version: ${version}`)
+  console.log(`[execWithNodeVersion] Resolved node: ${nodePath}`)
+  console.log(`[execWithNodeVersion] Resolved npm: ${npmPath}`)
   console.log(`[execWithNodeVersion] Command: ${modifiedCommand}`)
 
   // 检查工作目录是否存在
@@ -366,4 +369,28 @@ export async function getSystemNodeVersion() {
   } catch (error) {
     throw new Error('Node.js not found in system PATH')
   }
+}
+
+/**
+ * 获取优选的运行时 Node 版本
+ */
+export function getPreferredRuntimeNodeVersion() {
+  const exists = fs.existsSync(NODE_VERSIONS_DIR)
+  const dirs = exists ? fs.readdirSync(NODE_VERSIONS_DIR) : []
+  const versions = dirs
+    .filter(name => name.startsWith('node-v'))
+    .map(name => name.replace('node-v', ''))
+  console.log(`[node-manager] Runtime dir exists=${exists}, entries=[${dirs.join(', ')}], versions=[${versions.join(', ')}]`)
+  if (versions.length === 0) {
+    throw new Error('[node-manager] No runtime Node versions installed in runtime/node-versions')
+  }
+  // 选择最高版本
+  versions.sort((a, b) => {
+    const [aM, aMi, aP] = a.split('.').map(Number)
+    const [bM, bMi, bP] = b.split('.').map(Number)
+    if (aM !== bM) return bM - aM
+    if (aMi !== bMi) return bMi - aMi
+    return bP - aP
+  })
+  return versions[0]
 }

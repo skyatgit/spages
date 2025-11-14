@@ -1,7 +1,0 @@
-@import './base.css';
-
-/* 全局链接样式 */
-a {
-  text-decoration: none;
-  transition: 0.3s;
-}

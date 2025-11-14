@@ -1,17 +1,14 @@
 import express from 'express'
 import cors from 'cors'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { initApp } from './utils/init.js'
 import authRoutes from './routes/auth.js'
 import githubRoutes from './routes/github.js'
 import projectsRoutes from './routes/projects-v3.js'
 import systemRoutes from './routes/system.js'
-import { projectIndex, ProjectConfig } from './services/project-manager.js'
+import { projectIndex } from './services/project-manager.js'
 import { mainConfig } from './utils/config.js'
-import { startServerV3, deployProjectV3 } from './services/deployment-v3.js'
+import { deployProjectV3 } from './services/deployment-v3.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3000
 const HOST = process.env.HOST || 'localhost' // 只监听 localhost，不暴露到外网
@@ -36,14 +33,33 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
 })
 
-// 注意：不再在此处提供生产模式静态托管，前端交由"系统前端项目"受管托管
-
 app.listen(PORT, HOST, async () => {
   console.log(`Server running on http://${HOST}:${PORT}`)
   console.log('Backend is only accessible via localhost (not exposed to internet)')
-  console.log('Note: Frontend should be started separately using npm run dev in the frontend directory')
+  console.log('[Startup] Auto-deploying system frontend using full pipeline (skip clone, use runtime Node)...')
 
-  // 前后端分离后，不再自动启动前端
-  // 用户应该手动启动前端：cd frontend && npm run dev
-  console.log('[Info] Please start frontend manually: cd frontend && npm run dev')
+  // 自动部署系统前端：完整流程（检测框架、使用runtime Node、安装依赖、构建、启动）
+  try {
+    const config = mainConfig.read()
+    const frontendId = config.frontend?.projectId || 'proj_spages_frontend'
+    
+    console.log(`[Startup] Deploying system frontend: ${frontendId}`)
+    
+    // deployProjectV3 会执行完整流程：
+    // - 跳过克隆（type=core）
+    // - 检测框架
+    // - 检测并安装 Node 版本（runtime）
+    // - npm install（使用 runtime Node）
+    // - npm run build（使用 runtime Node）
+    // - 启动静态服务器
+    await deployProjectV3(frontendId, { 
+      reason: 'system-auto-start', 
+      triggeredBy: 'backend-startup' 
+    })
+    
+    console.log(`[Startup] ✅ System frontend deployed and started successfully`)
+  } catch (error) {
+    console.error(`[Startup] ⚠️  Failed to auto-deploy system frontend: ${error.message}`)
+    console.log(`[Startup] You can manually deploy it later via the UI`)
+  }
 })

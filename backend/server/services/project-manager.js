@@ -26,6 +26,7 @@ const __dirname = path.dirname(__filename)
 // 从 backend/server/services/ 向上两级到 backend/
 const PROJECTS_DIR = path.resolve(__dirname, '../..', 'projects')
 const INDEX_FILE = path.resolve(__dirname, '../..', 'data', 'projects-index.json')
+const BACKEND_DIR = path.resolve(__dirname, '../..')  // backend 目录
 
 // 确保目录存在
 if (!fs.existsSync(PROJECTS_DIR)) {
@@ -55,7 +56,7 @@ export class ProjectPaths {
         if (cfg && cfg.sourceRoot && typeof cfg.sourceRoot === 'string') {
           this.source = path.isAbsolute(cfg.sourceRoot)
             ? cfg.sourceRoot
-            : path.join(process.cwd(), cfg.sourceRoot)
+            : path.resolve(BACKEND_DIR, cfg.sourceRoot)  // 基于 backend 目录解析相对路径
         }
       }
     } catch (e) {
@@ -482,8 +483,7 @@ export class ProjectIndexManager {
               url: config.url || null,
               updatedAt: config.updatedAt,
               type: config.type || null,
-              managed: config.managed === true,
-              mode: config.mode || null
+              managed: config.managed === true
             }
           } catch (error) {
             console.error(`Failed to read config for ${dir}:`, error)

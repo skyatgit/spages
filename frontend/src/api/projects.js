@@ -34,16 +34,6 @@ export const projectsAPI = {
   // 停止项目
   stopProject(id) {
     return apiClient.post(`/projects/${id}/stop`)
-  },
-
-  // 切换模式（dev/prod）
-  switchMode(id, mode) {
-    return apiClient.post(`/projects/${id}/mode`, { mode })
-  },
-
-  // 重启项目
-  restartProject(id) {
-    return apiClient.post(`/projects/${id}/restart`)
   }
 }
 

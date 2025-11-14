@@ -8,8 +8,11 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+backend/node_modules
+frontend/node_modules
 .DS_Store
 dist
+frontend/dist
 dist-ssr
 coverage
 *.local
@@ -35,12 +38,10 @@ coverage
 # Vitest
 __screenshots__/
 
-# SPages runtime data
-data/
-runtime/
-dist-release/
-temp-build/
-projects/
+# SPages runtime data (now in backend/)
+backend/data/
+backend/runtime/
+backend/projects/
 .env
 .runtime/
 docs/
