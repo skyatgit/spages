@@ -768,6 +768,12 @@ const saveSystemFrontendConfig = async () => {
     toast.error(portError.value)
     return
   }
+  
+  // 检查端口或服务器地址是否改变
+  const portChanged = port !== systemFrontend.value.port
+  const serverHostChanged = (editingFrontendServerHost.value.trim() || null) !== systemFrontend.value.serverHost
+  const needsRedirect = portChanged || serverHostChanged
+  
   try {
     const updates = {
       port,
@@ -779,7 +785,29 @@ const saveSystemFrontendConfig = async () => {
     isEditingFrontend.value = false
     toast.success(t('settings.configUpdated'))
     const shouldRedeploy = await modal.confirm(t('settings.redeployToApply'))
-    if (shouldRedeploy) await redeploySystemFrontend()
+    if (shouldRedeploy) {
+      await redeploySystemFrontend()
+      
+      // 如果端口或服务器地址改变了，等待部署完成后自动跳转到新地址的设置页
+      if (needsRedirect) {
+        // 等待一段时间让部署完成
+        await new Promise(resolve => setTimeout(resolve, 3000))
+        
+        // 构建新的 URL
+        const protocol = window.location.protocol
+        const newHost = updates.serverHost || window.location.hostname
+        const newPort = updates.port
+        const newUrl = `${protocol}//${newHost}:${newPort}/settings`
+        
+        // 提示用户即将跳转
+        toast.success(t('settings.redirectingToNewAddress'))
+        
+        // 延迟跳转，让用户看到提示
+        setTimeout(() => {
+          window.location.href = newUrl
+        }, 1500)
+      }
+    }
   } catch (error) {
     console.error('保存系统前端配置失败:', error)
     toast.error(t('settings.configUpdateFailed'))

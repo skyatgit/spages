@@ -239,6 +239,7 @@ export default {
     configUpdateFailed: '配置更新失败',
     invalidPort: '端口号必须在 1-65535 之间',
     redeployToApply: '是否立即重新部署以应用更改？',
+    redirectingToNewAddress: '正在跳转到新地址...',
     frontendServerHostSelect: '服务器地址',
     frontendServerHostPlaceholder: '选择或输入服务器地址（留空自动）',
     frontendServerHostAuto: '自动检测',

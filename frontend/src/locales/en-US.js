@@ -239,6 +239,7 @@ export default {
     configUpdateFailed: 'Failed to update configuration',
     invalidPort: 'Port must be between 1 and 65535',
     redeployToApply: 'Redeploy now to apply changes?',
+    redirectingToNewAddress: 'Redirecting to new address...',
     frontendServerHostSelect: 'Server Host',
     frontendServerHostPlaceholder: 'Select or enter server host (blank = auto)',
     frontendServerHostAuto: 'Auto Detect',
