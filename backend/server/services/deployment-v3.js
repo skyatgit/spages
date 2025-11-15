@@ -82,14 +82,16 @@ class DeploymentLogger {
 
   log(message, type = 'info') {
     const timestamp = new Date().toISOString()
+    const cleanMessage = String(message ?? '') // 不再移除 ANSI，保持原样
+
     const logEntry = {
       timestamp,
       type,
-      message
+      message: cleanMessage
     }
 
     this.logs.push(logEntry)
-    const logLine = `[${timestamp}] [${type.toUpperCase()}] ${message}\n`
+    const logLine = `[${timestamp}] [${type.toUpperCase()}] ${cleanMessage}\n`
     this.stream.write(logLine)
     console.log(`[${this.projectName}]`, logLine.trim())
 
@@ -816,20 +818,33 @@ export function getDeploymentLogs(projectId, deploymentId = null) {
 function parseLogFile(logFile) {
   try {
     const logContent = fs.readFileSync(logFile, 'utf-8')
-    return logContent.split('\n')
-      .filter(line => line.trim())
-      .map(line => {
-        const match = line.match(/^\[(.*?)] \[(.*?)] (.*)$/)
-        if (match) {
-          return {
-            timestamp: match[1],
-            type: match[2].toLowerCase(),
-            message: match[3]
-          }
+    const lines = logContent.split(/\n/) // 保留内部换行
+    const entries = []
+    let current = null
+    const pattern = /^\[(.*?)\] \[([A-Z]+)] (.*)$/
+
+    for (let rawLine of lines) {
+      if (!rawLine) continue
+      const line = rawLine.replace(/\r$/, '') // 统一移除行尾 CR
+      const match = line.match(pattern)
+      if (match) {
+        // 新日志行
+        current = {
+          timestamp: match[1],
+          type: match[2].toLowerCase(),
+          message: match[3]
         }
-        return null
-      })
-      .filter(log => log !== null)
+        entries.push(current)
+      } else if (current) {
+        // 续行：追加到上一条日志的 message
+        current.message += '\n' + line
+      } else {
+        // 文件开头的孤立行（无时间戳格式），忽略或可选择保留；此处忽略
+        continue
+      }
+    }
+
+    return entries
   } catch (error) {
     console.error('Error parsing log file:', error)
     return []

@@ -24,7 +24,7 @@
           :class="`log-${log.type}`"
         >
           <span class="log-time">{{ formatTime(log.timestamp) }}</span>
-          <span class="log-message">{{ log.message }}</span>
+          <span class="log-message" v-html="ansiToHtml(log.message)"></span>
         </div>
       </div>
     </div>
@@ -70,21 +70,58 @@ const downloadLogs = () => {
   emit('download')
 }
 
-// 检查滚动条是否在底部（容差5px）
+// ANSI 到 HTML 转换
+const ansiToHtml = (text) => {
+  if (!text) return ''
+  
+  // HTML 转义（保留换行符）
+  let html = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\r\n/g, '\n')  // 统一换行符
+    .replace(/\r/g, '\n')    // CR 转为 LF
+  
+  // ANSI 颜色映射
+  const colors = {
+    '30': '#000', '31': '#e74c3c', '32': '#2ecc71', '33': '#f1c40f',
+    '34': '#3498db', '35': '#9b59b6', '36': '#1abc9c', '37': '#ecf0f1',
+    '90': '#7f8c8d', '91': '#ff6b6b', '92': '#51cf66', '93': '#ffd43b',
+    '94': '#4dabf7', '95': '#b197fc', '96': '#63e6be', '97': '#f8f9fa'
+  }
+  
+  // 替换所有 ANSI 序列
+  html = html.replace(/\u001b\[([0-9;]+)m/g, (match, codes) => {
+    const codeList = codes.split(';')
+    let result = ''
+    
+    for (const code of codeList) {
+      if (code === '0') result += '</span>'  // 重置
+      else if (code === '1') result += '<span style="font-weight:600">'  // 粗体
+      else if (code === '2') result += '<span style="opacity:0.6">'  // 暗淡
+      else if (code === '22') result += '</span>'  // 非粗体/非暗淡
+      else if (code === '39') result += '</span>'  // 默认前景色
+      else if (colors[code]) result += `<span style="color:${colors[code]}">`
+    }
+    
+    return result
+  })
+  
+  // 转换换行符为 <br>
+  html = html.replace(/\n/g, '<br>')
+  
+  return html
+}
+
 const isScrollAtBottom = () => {
   if (!logContainer.value) return false
   const { scrollTop, scrollHeight, clientHeight } = logContainer.value
   return scrollHeight - scrollTop - clientHeight < 5
 }
 
-// Auto-scroll to bottom when new logs arrive
 watch(() => props.logs, async () => {
-  // 在日志更新前，检查滚动条是否在底部
   const shouldScroll = isScrollAtBottom()
-
   await nextTick()
-
-  // 只有当之前滚动条在底部时，才自动滚动到底部
   if (shouldScroll && logContainer.value) {
     logContainer.value.scrollTop = logContainer.value.scrollHeight
   }
@@ -165,23 +202,7 @@ watch(() => props.logs, async () => {
 .log-message {
   flex: 1;
   word-break: break-word;
-}
-
-.log-info {
   color: #ffffff;
-}
-
-.log-success {
-  color: #4ade80;
-}
-
-.log-warning {
-  color: #fbbf24;
-}
-
-.log-error {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
 }
 
 .log-content::-webkit-scrollbar {

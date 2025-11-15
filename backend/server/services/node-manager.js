@@ -325,9 +325,12 @@ export async function execWithNodeVersion(command, version, cwd, onOutput) {
       cwd,
       maxBuffer: 10 * 1024 * 1024,
       windowsHide: true,
-      shell: true // 确保在 shell 中执行
+      shell: true,
+      env: {
+        ...process.env,
+        FORCE_COLOR: '1'
+      }
     }
-
     const child = exec(modifiedCommand, options)
 
     let output = ''
