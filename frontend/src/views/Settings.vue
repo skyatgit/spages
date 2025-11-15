@@ -82,9 +82,54 @@
               <StatusBadge v-if="systemFrontend.id" :status="systemFrontend.status" />
               <span v-else class="info-value">{{ $t('common.loading') }}</span>
             </div>
-            <div v-if="systemFrontend.port" class="info-row">
+            <!-- 移除非编辑模式的纯文本端口与服务器地址行 -->
+            <div class="info-row info-row-fixed-height">
               <span class="info-label">{{ $t('settings.port') }}</span>
-              <span class="info-value">{{ systemFrontend.port }}</span>
+              <div class="info-content field-with-right-addon">
+                <input
+                  :value="isEditingFrontend ? editingFrontendPort : systemFrontend.port"
+                  @input="onPortInputIfEditing"
+                  :disabled="!isEditingFrontend"
+                  type="number"
+                  class="port-input"
+                  :placeholder="$t('settings.frontendPortLabel')"
+                  min="1024"
+                  max="65535"
+                />
+                <span class="right-addon inline-status" :class="{ 'status-checking': portChecking, 'status-error': !!portError, 'status-ok': !portChecking && !portError && portAvailable }">
+                  <template v-if="isEditingFrontend && editingFrontendPort !== null && editingFrontendPort !== ''">
+                    {{ portChecking ? $t('settings.frontendPortChecking') : (portError ? portError : (portAvailable ? $t('settings.frontendPortAvailable') : '') ) }}
+                  </template>
+                  <template v-else>&nbsp;</template>
+                </span>
+              </div>
+            </div>
+            <div class="info-row info-row-fixed-height">
+              <span class="info-label">{{ $t('settings.frontendServerHostSelect') }}</span>
+              <div class="info-content field-with-right-addon">
+                <select
+                  :value="isEditingFrontend ? editingFrontendServerHost : (systemFrontend.serverHost || '')"
+                  @change="onServerHostChangeIfEditing"
+                  :disabled="!isEditingFrontend"
+                  class="host-select"
+                >
+                  <option value="">{{ $t('settings.frontendServerHostAuto') }}</option>
+                  <option v-if="currentServerHost && !networkHasCurrent" :value="currentServerHost">
+                    {{ currentServerHost }}
+                  </option>
+                  <option v-for="iface in networkInterfaces" :key="iface.address" :value="iface.address">
+                    {{ iface.address }} ({{ iface.description || iface.name }})
+                  </option>
+                </select>
+                <button
+                  class="btn btn-secondary right-addon refresh-inline"
+                  @click="loadNetworkInterfaces"
+                  :disabled="loadingInterfaces || !isEditingFrontend"
+                  :title="isEditingFrontend ? $t('settings.refreshInterfaces') : $t('settings.editToRefresh')"
+                >
+                  {{ loadingInterfaces ? $t('common.loading') : '↻' }}
+                </button>
+              </div>
             </div>
             <div v-if="systemFrontend.url" class="info-row">
               <span class="info-label">{{ $t('settings.url') }}</span>
@@ -102,13 +147,37 @@
 
           <div style="margin-top: 15px; display: flex; gap: 10px;">
             <button 
-              class="btn btn-primary" 
+              v-if="!isEditingFrontend"
+              class="btn btn-primary btn-wide" 
               @click="redeploySystemFrontend"
               :disabled="isRedeployingFrontend"
             >
               {{ isRedeployingFrontend ? '🔄 ' + $t('settings.redeploying') : '🔄 ' + $t('settings.redeploy') }}
             </button>
-            <a v-if="systemFrontend.url" :href="systemFrontend.url" target="_blank" class="btn btn-secondary">
+            <button
+              v-if="!isEditingFrontend"
+              class="btn btn-secondary btn-medium"
+              @click="editSystemFrontend"
+            >
+              ⚙️ {{ $t('settings.edit') }}
+            </button>
+            <button
+              v-if="isEditingFrontend"
+              class="btn btn-primary btn-wide"
+              @click="saveSystemFrontendConfig"
+              :disabled="portChecking || (portError && !portAvailable) || !editingFrontendPort"
+              :title="portChecking ? $t('settings.frontendPortChecking') : (portError && !portAvailable ? portError : '')"
+            >
+              💾 {{ $t('settings.save') }}
+            </button>
+            <button
+              v-if="isEditingFrontend"
+              class="btn btn-secondary btn-medium"
+              @click="cancelEditSystemFrontend"
+            >
+              ✖️ {{ $t('settings.cancel') }}
+            </button>
+            <a v-if="systemFrontend.url && !isEditingFrontend" :href="systemFrontend.url" target="_blank" class="btn btn-secondary btn-medium">
               🔗 {{ $t('settings.visitSite') }}
             </a>
           </div>
@@ -235,7 +304,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Layout from '@/components/Layout.vue'
@@ -244,9 +313,10 @@ import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { useToast } from '@/utils/toast'
 import { getGithubAppConfig, deleteGithubAppConfig, getGithubInstallUrl, getGithubAccounts, removeGithubAccount } from '@/api/github'
-import { getSystemInfo } from '@/api/system'
+import { getSystemInfo, getNetworkInterfaces } from '@/api/system'
 import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
 import { projectsAPI, deployProject } from '@/api/projects'
+import { checkPort } from '@/api/projects'
 
 const { t } = useI18n()
 const modal = useModal()
@@ -259,12 +329,18 @@ const systemFrontend = ref({
   id: null,
   status: 'loading',
   port: null,
+  serverHost: null,
   url: null,
   lastDeploy: null,
   nodeVersion: null
 })
 const isRedeployingFrontend = ref(false)
 let systemFrontendStateEventSource = null
+
+// 编辑配置相关状态
+const isEditingFrontend = ref(false)
+const editingFrontendPort = ref(null)
+const editingFrontendServerHost = ref('')
 
 // 管理员凭据
 const currentPassword = ref('')
@@ -285,6 +361,16 @@ const systemInfo = ref({
   nodeVersion: 'Loading...',
   platform: 'Loading...'
 })
+
+const networkInterfaces = ref([])
+const loadingInterfaces = ref(false)
+const portChecking = ref(false)
+const portAvailable = ref(false)
+const portError = ref('')
+let portCheckTimer = null
+
+const currentServerHost = computed(() => isEditingFrontend.value ? (editingFrontendServerHost.value || '') : (systemFrontend.value.serverHost || ''))
+const networkHasCurrent = computed(() => !!currentServerHost.value && networkInterfaces.value.some(i => i.address === currentServerHost.value))
 
 const handleLogout = async () => {
   const confirmed = await modal.confirm(t('settings.logoutConfirm'))
@@ -550,30 +636,23 @@ const removeApp = async (appId, username, appSlug) => {
 // 加载系统前端项目信息
 const loadSystemFrontend = async () => {
   try {
-    console.log('[loadSystemFrontend] Loading projects...')
     const projects = await projectsAPI.getProjects()
-    console.log('[loadSystemFrontend] Projects loaded:', projects)
-    console.log('[loadSystemFrontend] Projects count:', projects.length)
-    
     const frontendProject = projects.find(p => p.type === 'core' && p.managed === true)
-    console.log('[loadSystemFrontend] Found frontend project:', frontendProject)
-    
     if (frontendProject) {
       systemFrontend.value = {
         id: frontendProject.id,
         status: frontendProject.status || 'stopped',
         port: frontendProject.port,
+        serverHost: frontendProject.serverHost || null,
         url: frontendProject.url,
         lastDeploy: frontendProject.lastDeploy,
         nodeVersion: frontendProject.nodeVersion
       }
-      console.log('[loadSystemFrontend] System frontend loaded:', systemFrontend.value)
     } else {
-      console.warn('[loadSystemFrontend] System frontend project not found in projects list')
       systemFrontend.value.status = 'not-found'
     }
   } catch (error) {
-    console.error('Failed to load system frontend:', error)
+    console.error('加载系统前端失败:', error)
     systemFrontend.value.status = 'error'
   }
 }
@@ -609,13 +688,14 @@ const connectSystemFrontendStateStream = () => {
           id: systemFrontend.value.id,
           status: data.data.status || systemFrontend.value.status,
           port: data.data.port || systemFrontend.value.port,
+          serverHost: data.data.serverHost || systemFrontend.value.serverHost,
           url: data.data.url || systemFrontend.value.url,
           lastDeploy: data.data.lastDeploy || systemFrontend.value.lastDeploy,
           nodeVersion: data.data.nodeVersion || systemFrontend.value.nodeVersion
         }
       }
-    } catch (error) {
-      console.error('[SSE] Failed to parse system frontend state data:', error)
+    } catch (e) {
+      console.error('[SSE] 解析系统前端状态失败:', e)
     }
   }
 
@@ -633,7 +713,7 @@ const connectSystemFrontendStateStream = () => {
   }
 }
 
-// 重新部署系统前端
+// 重���部署系统前端
 const redeploySystemFrontend = async () => {
   console.log('[redeploySystemFrontend] systemFrontend.value:', systemFrontend.value)
   
@@ -658,12 +738,130 @@ const redeploySystemFrontend = async () => {
   }
 }
 
-// 检查 OAuth 回调
+// 进入编辑
+const editSystemFrontend = () => {
+  if (!systemFrontend.value.id) return
+  isEditingFrontend.value = true
+  editingFrontendPort.value = systemFrontend.value.port
+  editingFrontendServerHost.value = systemFrontend.value.serverHost || ''
+}
+
+// 取消编辑
+const cancelEditSystemFrontend = () => {
+  isEditingFrontend.value = false
+  editingFrontendPort.value = null
+  editingFrontendServerHost.value = ''
+}
+
+// 保存配置
+const saveSystemFrontendConfig = async () => {
+  if (!systemFrontend.value.id) {
+    toast.error(t('settings.systemFrontendNotFound'))
+    return
+  }
+  const port = parseInt(editingFrontendPort.value)
+  if (isNaN(port) || port < 1024 || port > 65535) {
+    toast.error(t('settings.frontendPortInvalid'))
+    return
+  }
+  if (portError.value && !portAvailable.value) {
+    toast.error(portError.value)
+    return
+  }
+  try {
+    const updates = {
+      port,
+      serverHost: editingFrontendServerHost.value.trim() || null
+    }
+    await projectsAPI.updateProject(systemFrontend.value.id, updates)
+    systemFrontend.value.port = updates.port
+    systemFrontend.value.serverHost = updates.serverHost
+    isEditingFrontend.value = false
+    toast.success(t('settings.configUpdated'))
+    const shouldRedeploy = await modal.confirm(t('settings.redeployToApply'))
+    if (shouldRedeploy) await redeploySystemFrontend()
+  } catch (error) {
+    console.error('保存系统前端配置失败:', error)
+    toast.error(t('settings.configUpdateFailed'))
+  }
+}
+
+// 加载网络接口
+const loadNetworkInterfaces = async () => {
+  loadingInterfaces.value = true
+  try {
+    const resp = await getNetworkInterfaces()
+    networkInterfaces.value = resp.interfaces || []
+  } catch (e) {
+    console.error('加载网络接口失败:', e)
+    toast.error('网络接口加载失败')
+  } finally {
+    loadingInterfaces.value = false
+  }
+}
+
+const onServerHostChange = () => {
+  // 可选：后续扩展逻辑
+}
+
+const onPortInput = () => {
+  portError.value = ''
+  portAvailable.value = false
+  if (portCheckTimer) clearTimeout(portCheckTimer)
+  const val = editingFrontendPort.value
+  if (!val || val < 1024 || val > 65535) {
+    portError.value = t('settings.frontendPortInvalid')
+    return
+  }
+  portCheckTimer = setTimeout(checkFrontendPort, 500)
+}
+
+const checkFrontendPort = async () => {
+  const val = editingFrontendPort.value
+  if (!val || val < 1024 || val > 65535) {
+    portError.value = t('settings.frontendPortInvalid')
+    return
+  }
+  // 如果端口未改变，直接认为可用
+  if (val === systemFrontend.value.port) {
+    portAvailable.value = true
+    return
+  }
+  portChecking.value = true
+  try {
+    const resp = await checkPort(val)
+    if (resp && resp.available === true) {
+      portAvailable.value = true
+    } else {
+      portError.value = t('settings.frontendPortInUse')
+    }
+  } catch (e) {
+    console.error('端口检测失败:', e)
+    portError.value = t('settings.frontendPortCheckFailed')
+  } finally {
+    portChecking.value = false
+  }
+}
+
+// 在进入编辑时预加载网络接口
+watch(isEditingFrontend, async (val) => {
+  if (val) {
+    // 初始化端口状态
+    onPortInput()
+  } else {
+    portError.value = ''
+    portAvailable.value = false
+    portChecking.value = false
+    if (portCheckTimer) clearTimeout(portCheckTimer)
+  }
+})
+
 onMounted(async () => {
   await loadGithubAppConfig() // Load GitHub App configuration first
   await loadGithubAccounts()
   await loadSystemInfo()
   await loadSystemFrontend()
+  await loadNetworkInterfaces() // 在组件挂载时就加载网络接口列表
   connectSystemFrontendStateStream()
 
   // 检查是否来自 OAuth 回调或 App 设置
@@ -704,6 +902,19 @@ onUnmounted(() => {
 const formatDate = (date) => {
   if (!date) return t('dashboard.never')
   return new Date(date).toLocaleString()
+}
+
+const onPortInputIfEditing = (e) => {
+  if (!isEditingFrontend.value) return
+  const v = e?.target?.value
+  editingFrontendPort.value = v === '' ? '' : Number(v)
+  onPortInput()
+}
+
+const onServerHostChangeIfEditing = (e) => {
+  if (!isEditingFrontend.value) return
+  editingFrontendServerHost.value = e?.target?.value || ''
+  onServerHostChange()
 }
 </script>
 
@@ -818,6 +1029,9 @@ const formatDate = (date) => {
   outline: none;
   border-color: #3498db;
 }
+
+.port-input { padding:6px 10px; border:2px solid #ecf0f1; border-radius:6px; font-size:14px; height:32px; box-sizing:border-box; }
+.port-input:focus { outline:none; border-color:#3498db; }
 
 .checkbox {
   margin-right: 8px;
@@ -1021,9 +1235,8 @@ const formatDate = (date) => {
 
 .info-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0;
+  align-items: flex-start;
+  padding: 10px 0;
   border-bottom: 1px solid #ecf0f1;
 }
 
@@ -1031,16 +1244,88 @@ const formatDate = (date) => {
   border-bottom: none;
 }
 
+.info-row-fixed-height {
+  height: 44px;
+  align-items: center;
+}
+
 .info-label {
+  font-size: 13px;
+  color: #7f8c8d;
   font-weight: 600;
-  color: #495057;
-  font-size: 14px;
+  width: 120px;
+  flex: 0 0 120px;
+  line-height: 1.2;
 }
 
 .info-value {
-  color: #6c757d;
-  font-family: monospace;
   font-size: 14px;
+  color: #2c3e50;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.info-value-link {
+  font-size: 14px;
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.info-value-link:hover {
+  text-decoration: underline;
+}
+
+.info-content {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.info-content.column {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.text-info {
+  color: #3498db;
+}
+
+.text-danger {
+  color: #e74c3c;
+}
+
+.text-success {
+  color: #28a745;
+}
+
+.port-status {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.form-select {
+  padding: 6px 10px;
+  border: 2px solid #ecf0f1;
+  border-radius: 6px;
+  background: #fff;
+  width: 240px;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.apply-hint {
+  font-size: 12px;
+  color: #7f8c8d;
+  margin-top: 2px;
 }
 
 .no-accounts {
@@ -1048,7 +1333,6 @@ const formatDate = (date) => {
   padding: 40px;
   color: #7f8c8d;
 }
-
 
 .info-grid {
   display: grid;
@@ -1081,45 +1365,24 @@ const formatDate = (date) => {
   word-break: break-all;
 }
 
-.info-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 15px;
-}
+.btn-wide { width:160px; min-width:160px; display:inline-flex; justify-content:center; align-items:center; }
+.btn-medium { width:140px; min-width:140px; display:inline-flex; justify-content:center; align-items:center; }
+@media (max-width: 520px) { .btn-wide, .btn-medium { width:100%; min-width:0; } }
 
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #ecf0f1;
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-label {
-  font-size: 13px;
-  color: #7f8c8d;
-  font-weight: 600;
-}
-
-.info-value {
-  font-size: 14px;
-  color: #2c3e50;
-  font-weight: 500;
-}
-
-.info-value-link {
-  font-size: 14px;
-  color: #3498db;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.info-value-link:hover {
-  text-decoration: underline;
-}
+/* 新的对齐布局：输入框右边缘对齐到固定位置，各自保持自适应宽度 */
+.field-with-right-addon { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:8px; }
+.field-with-right-addon > input,
+.field-with-right-addon > select { justify-self:end; }
+.field-with-right-addon > input { width:auto; min-width:80px; max-width:140px; }
+.field-with-right-addon > select { width:auto; min-width:160px; max-width:260px; }
+.right-addon { width:70px; } /* 固定右侧附加区域宽度 */
+.inline-status { font-size:12px; text-align:center; white-space:nowrap; display:block; }
+.refresh-inline { padding:6px 10px; height:32px; display:inline-flex; align-items:center; justify-content:center; }
+.status-checking { color:#3498db; }
+.status-error { color:#e74c3c; }
+.status-ok { color:#28a745; }
+.host-select { padding:6px 10px; border:2px solid #ecf0f1; border-radius:6px; background:#fff; font-size:14px; height:32px; box-sizing:border-box; }
+.host-select:focus { outline:none; border-color:#3498db; }
+.host-select:disabled, .port-input:disabled { background:#f5f5f5; color:#7f8c8d; cursor:not-allowed; }
+.refresh-inline:disabled { opacity:.6; cursor:not-allowed; }
 </style>
