@@ -25,7 +25,7 @@
     </div>
 
     <div class="card-footer">
-      <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-small btn-visit" @click.stop>
+      <a v-if="project.url && project.status === 'running'" :href="project.url" target="_blank" class="btn btn-small btn-visit" @click.stop>
         🔗 {{ $t('dashboard.visitSite') }}
       </a>
       <button

@@ -48,7 +48,7 @@
           </div>
 
           <div class="info-actions">
-            <a v-if="project.url" :href="project.url" target="_blank" class="btn btn-secondary">
+            <a v-if="project.url && project.status === 'running'" :href="project.url" target="_blank" class="btn btn-secondary">
               🔗 {{ $t('projectDetail.visitSite') }}
             </a>
             <button
