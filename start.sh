@@ -23,13 +23,21 @@ else
     echo "[✓] Node.js v$NODE_VERSION 安装完成"
 fi
 
+# 设置 PATH 环境变量（确保后续命令能找到 node 和 npm）
+NODE_BIN_DIR=$(dirname "$NODE_BIN")
+export PATH="$NODE_BIN_DIR:$PATH"
+
 # 安装后端依赖
 echo ""
 cd "$BACKEND_DIR"
-[ ! -d "node_modules" ] && echo "[*] 安装后端依赖..." && "$NPM_BIN" install || echo "[✓] 后端依赖已存在"
+if [ ! -d "node_modules" ]; then
+    echo "[*] 安装后端依赖..."
+    "$NPM_BIN" install
+    echo "[✓] 后端依赖安装完成"
+else
+    echo "[✓] 后端依赖已存在"
+fi
 
 # 启动后端服务
 echo ""
-NODE_BIN_DIR=$(dirname "$NODE_BIN")
-export PATH="$NODE_BIN_DIR:$PATH"
 "$NPM_BIN" start
