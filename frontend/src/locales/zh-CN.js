@@ -241,7 +241,7 @@ export default {
     redeployToApply: '是否立即重新部署以应用更改？',
     redirectingToNewAddress: '正在跳转到新地址...',
     frontendServerHostSelect: '服务器地址',
-    frontendServerHostPlaceholder: '选择或输入服务器地址（留空自动）',
+    frontendServerHostPlaceholder: '输入 IP 地址或域名',
     frontendServerHostAuto: '自动检测',
     frontendPortLabel: '端口',
     frontendPortChecking: '端口检测中…',

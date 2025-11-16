@@ -241,7 +241,7 @@ export default {
     redeployToApply: 'Redeploy now to apply changes?',
     redirectingToNewAddress: 'Redirecting to new address...',
     frontendServerHostSelect: 'Server Host',
-    frontendServerHostPlaceholder: 'Select or enter server host (blank = auto)',
+    frontendServerHostPlaceholder: 'Enter IP address or domain',
     frontendServerHostAuto: 'Auto Detect',
     frontendPortLabel: 'Port',
     frontendPortChecking: 'Checking port…',

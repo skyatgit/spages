@@ -106,29 +106,15 @@
             </div>
             <div class="info-row info-row-fixed-height">
               <span class="info-label">{{ $t('settings.frontendServerHostSelect') }}</span>
-              <div class="info-content field-with-right-addon">
-                <select
+              <div class="info-content">
+                <input
                   :value="isEditingFrontend ? editingFrontendServerHost : (systemFrontend.serverHost || '')"
-                  @change="onServerHostChangeIfEditing"
+                  @input="onServerHostInputIfEditing"
                   :disabled="!isEditingFrontend"
-                  class="host-select"
-                >
-                  <option value="">{{ $t('settings.frontendServerHostAuto') }}</option>
-                  <option v-if="currentServerHost && !networkHasCurrent" :value="currentServerHost">
-                    {{ currentServerHost }}
-                  </option>
-                  <option v-for="iface in networkInterfaces" :key="iface.address" :value="iface.address">
-                    {{ iface.address }} ({{ iface.description || iface.name }})
-                  </option>
-                </select>
-                <button
-                  class="btn btn-secondary right-addon refresh-inline"
-                  @click="loadNetworkInterfaces"
-                  :disabled="loadingInterfaces || !isEditingFrontend"
-                  :title="isEditingFrontend ? $t('settings.refreshInterfaces') : $t('settings.editToRefresh')"
-                >
-                  {{ loadingInterfaces ? $t('common.loading') : '↻' }}
-                </button>
+                  type="text"
+                  class="host-input"
+                  :placeholder="$t('settings.frontendServerHostPlaceholder')"
+                />
               </div>
             </div>
             <div v-if="systemFrontend.url" class="info-row">
@@ -304,7 +290,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import Layout from '@/components/Layout.vue'
@@ -313,7 +299,7 @@ import { logout } from '@/utils/auth'
 import { useModal } from '@/utils/modal'
 import { useToast } from '@/utils/toast'
 import { getGithubAppConfig, deleteGithubAppConfig, getGithubInstallUrl, getGithubAccounts, removeGithubAccount } from '@/api/github'
-import { getSystemInfo, getNetworkInterfaces } from '@/api/system'
+import { getSystemInfo } from '@/api/system'
 import { updateCredentials as updateCredentialsAPI } from '@/api/auth'
 import { projectsAPI, deployProject } from '@/api/projects'
 import { checkPort } from '@/api/projects'
@@ -362,15 +348,10 @@ const systemInfo = ref({
   platform: 'Loading...'
 })
 
-const networkInterfaces = ref([])
-const loadingInterfaces = ref(false)
 const portChecking = ref(false)
 const portAvailable = ref(false)
 const portError = ref('')
 let portCheckTimer = null
-
-const currentServerHost = computed(() => isEditingFrontend.value ? (editingFrontendServerHost.value || '') : (systemFrontend.value.serverHost || ''))
-const networkHasCurrent = computed(() => !!currentServerHost.value && networkInterfaces.value.some(i => i.address === currentServerHost.value))
 
 const handleLogout = async () => {
   const confirmed = await modal.confirm(t('settings.logoutConfirm'))
@@ -814,24 +795,6 @@ const saveSystemFrontendConfig = async () => {
   }
 }
 
-// 加载网络接口
-const loadNetworkInterfaces = async () => {
-  loadingInterfaces.value = true
-  try {
-    const resp = await getNetworkInterfaces()
-    networkInterfaces.value = resp.interfaces || []
-  } catch (e) {
-    console.error('加载网络接口失败:', e)
-    toast.error('网络接口加载失败')
-  } finally {
-    loadingInterfaces.value = false
-  }
-}
-
-const onServerHostChange = () => {
-  // 可选：后续扩展逻辑
-}
-
 const onPortInput = () => {
   portError.value = ''
   portAvailable.value = false
@@ -889,7 +852,6 @@ onMounted(async () => {
   await loadGithubAccounts()
   await loadSystemInfo()
   await loadSystemFrontend()
-  await loadNetworkInterfaces() // 在组件挂载时就加载网络接口列表
   connectSystemFrontendStateStream()
 
   // 检查是否来自 OAuth 回调或 App 设置
@@ -939,10 +901,9 @@ const onPortInputIfEditing = (e) => {
   onPortInput()
 }
 
-const onServerHostChangeIfEditing = (e) => {
+const onServerHostInputIfEditing = (e) => {
   if (!isEditingFrontend.value) return
   editingFrontendServerHost.value = e?.target?.value || ''
-  onServerHostChange()
 }
 </script>
 
@@ -1060,6 +1021,20 @@ const onServerHostChangeIfEditing = (e) => {
 
 .port-input { padding:6px 10px; border:2px solid #ecf0f1; border-radius:6px; font-size:14px; height:32px; box-sizing:border-box; }
 .port-input:focus { outline:none; border-color:#3498db; }
+
+.host-input { 
+  padding:6px 10px; 
+  border:2px solid #ecf0f1; 
+  border-radius:6px; 
+  font-size:14px; 
+  height:32px; 
+  box-sizing:border-box;
+  width: 100%;
+  max-width: 280px;
+  min-width: 200px;
+}
+.host-input:focus { outline:none; border-color:#3498db; }
+.host-input:disabled { background:#f5f5f5; color:#7f8c8d; cursor:not-allowed; }
 
 .checkbox {
   margin-right: 8px;
@@ -1409,8 +1384,6 @@ const onServerHostChangeIfEditing = (e) => {
 .status-checking { color:#3498db; }
 .status-error { color:#e74c3c; }
 .status-ok { color:#28a745; }
-.host-select { padding:6px 10px; border:2px solid #ecf0f1; border-radius:6px; background:#fff; font-size:14px; height:32px; box-sizing:border-box; }
-.host-select:focus { outline:none; border-color:#3498db; }
-.host-select:disabled, .port-input:disabled { background:#f5f5f5; color:#7f8c8d; cursor:not-allowed; }
+.port-input:disabled { background:#f5f5f5; color:#7f8c8d; cursor:not-allowed; }
 .refresh-inline:disabled { opacity:.6; cursor:not-allowed; }
 </style>
